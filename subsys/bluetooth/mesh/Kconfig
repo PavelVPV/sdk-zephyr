@@ -533,6 +533,24 @@ config BT_MESH_TX_SEG_MAX
 	  which leaves 56 bytes for application layer data using a
 	  4-byte MIC and 52 bytes using an 8-byte MIC.
 
+config BT_MESH_SEG_ACK_BASE_TIMEOUT
+	int "SegAck base timeout"
+	default 150
+	range 150 400
+	help
+	  Defines a base timeout for the acknowledgement timer used to delay transmission of the
+	  Segmented Acknowledgment message. The total timeout is calculated using this formula:
+	  BT_MESH_SEG_ACK_BASE_TIMEOUT + BT_MESH_ACK_PER_HOP_TIMEOUT * TTL.
+
+config BT_MESH_SEG_ACK_PER_HOP_TIMEOUT
+	int "SegAck timeout per hop"
+	default 50
+	range 50 250
+	help
+	  Defines a per hop timeout for the acknowledgement timer used to delay transmission of the
+	  Segmented Acknowledgment message. The total timeout is calculated using this formula:
+	  BT_MESH_SEG_ACK_BASE_TIMEOUT + BT_MESH_ACK_PER_HOP_TIMEOUT * TTL.
+
 config BT_MESH_DEFAULT_TTL
 	int "Default TTL value"
 	default 7
