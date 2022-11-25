@@ -466,6 +466,8 @@ struct bt_mesh_model_cb {
 				  const char *name, size_t len_rd,
 				  settings_read_cb read_cb, void *cb_arg);
 
+	void (*const pending_store)(struct bt_mesh_model *model);
+
 	/** @brief Callback called when the mesh is started.
 	 *
 	 *  This handler gets called after the node has been provisioned, or
@@ -677,6 +679,8 @@ static inline bool bt_mesh_model_in_primary(const struct bt_mesh_model *mod)
 int bt_mesh_model_data_store(struct bt_mesh_model *mod, bool vnd,
 			     const char *name, const void *data,
 			     size_t data_len);
+
+int bt_mesh_model_data_store_schedule(struct bt_mesh_model *mod);
 
 /** @brief Let a model extend another.
  *

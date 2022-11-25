@@ -34,6 +34,7 @@ enum {
 	BT_MESH_MOD_SUB_PENDING = BIT(1),
 	BT_MESH_MOD_PUB_PENDING = BIT(2),
 	BT_MESH_MOD_EXTENDED = BIT(3),
+	BT_MESH_MOD_DATA_PENDING = BIT(4),
 };
 
 /* Model publication information for persistent storage. */
@@ -1280,4 +1281,32 @@ static void commit_mod(struct bt_mesh_model *mod, struct bt_mesh_elem *elem,
 void bt_mesh_model_settings_commit(void)
 {
 	bt_mesh_model_foreach(commit_mod, NULL);
+}
+
+static void model_store_handler(struct k_work *work);
+static K_WORK_DELAYABLE_DEFINE(model_store_timer, model_store_handler);
+
+static void store_pending_data_mod(struct bt_mesh_model *mod,
+				   struct bt_mesh_elem *elem, bool vnd,
+				   bool primary, void *user_data)
+{
+	if (!mod->flags) {
+		return;
+	}
+
+	if (mod->flags & BT_MESH_MOD_DATA_PENDING) {
+		mod->flags &= ~BT_MESH_MOD_DATA_PENDING;
+		mod->cb->pending_store(mod);
+	}
+}
+
+static void model_store_handler(struct k_work *work)
+{
+	bt_mesh_model_foreach(store_pending_data_mod, NULL);
+}
+
+int bt_mesh_model_data_store_schedule(struct bt_mesh_model *mod)
+{
+	mod->flags |= BT_MESH_MOD_DATA_PENDING;
+	return k_work_schedule(&model_store_timer, K_SECONDS(CONFIG_BT_MESH_MODEL_SRV_STORE_TIMEOUT));
 }
