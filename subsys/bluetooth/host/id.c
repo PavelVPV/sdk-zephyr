@@ -360,25 +360,45 @@ int bt_id_set_adv_private_addr(struct bt_le_ext_adv *adv)
 	return 0;
 }
 #else
+#ifdef CONFIG_BT_NRPA_LIST_SIZE
+#define NRPA_LIST_SIZE CONFIG_BT_NRPA_LIST_SIZE
+#else
+/** Set size to 1 to avoid division by zero warning. */
+#define NRPA_LIST_SIZE 1
+#endif
+static bt_addr_t nrpa_list[NRPA_LIST_SIZE];
+static int nrpa_list_idx;
+
 int bt_id_set_private_addr(uint8_t id)
 {
-	bt_addr_t nrpa;
+	bt_addr_t *nrpa = &(bt_addr_t){};
 	int err;
 
-	err = bt_rand(nrpa.val, sizeof(nrpa.val));
-	if (err) {
-		return err;
+	if (IS_ENABLED(CONFIG_BT_NRPA_LIMIT)) {
+		nrpa = &nrpa_list[nrpa_list_idx];
 	}
 
-	BT_ADDR_SET_NRPA(&nrpa);
+	if (!IS_ENABLED(CONFIG_BT_NRPA_LIMIT) ||
+	    !bt_addr_cmp(nrpa, BT_ADDR_ANY)) {
+		err = bt_rand(nrpa->val, sizeof(nrpa->val));
+		if (err) {
+			return err;
+		}
+	}
 
-	err = set_random_address(&nrpa);
+	BT_ADDR_SET_NRPA(nrpa);
+
+	err = set_random_address(nrpa);
 	if (err)  {
 		return err;
 	}
 
 	if (IS_ENABLED(CONFIG_BT_LOG_SNIFFER_INFO)) {
-		BT_INFO("NRPA: %s", bt_addr_str(&nrpa));
+		BT_INFO("NRPA: %s", bt_addr_str(nrpa));
+	}
+
+	if (IS_ENABLED(CONFIG_BT_NRPA_LIMIT)) {
+		nrpa_list_idx = (nrpa_list_idx + 1) % ARRAY_SIZE(nrpa_list);
 	}
 
 	return 0;
@@ -386,23 +406,34 @@ int bt_id_set_private_addr(uint8_t id)
 
 int bt_id_set_adv_private_addr(struct bt_le_ext_adv *adv)
 {
-	bt_addr_t nrpa;
+	bt_addr_t *nrpa = &(bt_addr_t){};
 	int err;
 
-	err = bt_rand(nrpa.val, sizeof(nrpa.val));
-	if (err) {
-		return err;
+	if (IS_ENABLED(CONFIG_BT_NRPA_LIMIT)) {
+		nrpa = &nrpa_list[nrpa_list_idx];
 	}
 
-	BT_ADDR_SET_NRPA(&nrpa);
+	if (!IS_ENABLED(CONFIG_BT_NRPA_LIMIT) ||
+	    !bt_addr_cmp(nrpa, BT_ADDR_ANY)) {
+		err = bt_rand(nrpa->val, sizeof(nrpa->val));
+		if (err) {
+			return err;
+		}
+	}
 
-	err = bt_id_set_adv_random_addr(adv, &nrpa);
+	BT_ADDR_SET_NRPA(nrpa);
+
+	err = bt_id_set_adv_random_addr(adv, nrpa);
 	if (err) {
 		return err;
 	}
 
 	if (IS_ENABLED(CONFIG_BT_LOG_SNIFFER_INFO)) {
-		BT_INFO("NRPA: %s", bt_addr_str(&nrpa));
+		BT_INFO("NRPA: %s", bt_addr_str(nrpa));
+	}
+
+	if (IS_ENABLED(CONFIG_BT_NRPA_LIMIT)) {
+		nrpa_list_idx = (nrpa_list_idx + 1) % ARRAY_SIZE(nrpa_list);
 	}
 
 	return 0;
