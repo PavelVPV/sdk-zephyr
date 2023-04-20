@@ -40,6 +40,11 @@ LOG_MODULE_REGISTER(bt_mesh_settings);
 #define RPL_STORE_TIMEOUT (-1)
 #endif
 
+// FIXME: This workq could be enabled/disabled from Kconfig
+struct k_work_q settings_work_q;
+// FIXME: Stack size should be configured from Kconfig
+static K_THREAD_STACK_DEFINE(settings_work_stack, 2048);
+
 static struct k_work_delayable pending_store;
 static ATOMIC_DEFINE(pending_flags, BT_MESH_SETTINGS_FLAG_COUNT);
 
@@ -142,9 +147,9 @@ void bt_mesh_settings_store_schedule(enum bt_mesh_settings_flag flag)
 	 * deadline.
 	 */
 	if (timeout_ms < remaining_ms) {
-		k_work_reschedule(&pending_store, K_MSEC(timeout_ms));
+		k_work_reschedule_for_queue(&settings_work_q, &pending_store, K_MSEC(timeout_ms));
 	} else {
-		k_work_schedule(&pending_store, K_MSEC(timeout_ms));
+		k_work_schedule_for_queue(&settings_work_q, &pending_store, K_MSEC(timeout_ms));
 	}
 }
 
@@ -228,6 +233,11 @@ static void store_pending(struct k_work *work)
 
 void bt_mesh_settings_init(void)
 {
+	k_work_queue_start(&settings_work_q, settings_work_stack,
+			   K_THREAD_STACK_SIZEOF(settings_work_stack),
+			   K_PRIO_COOP(1), NULL);
+	k_thread_name_set(&settings_work_q.thread, "BT Mesh Settings Work");
+
 	k_work_init_delayable(&pending_store, store_pending);
 }
 
