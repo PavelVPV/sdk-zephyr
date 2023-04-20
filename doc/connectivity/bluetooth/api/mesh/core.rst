@@ -67,6 +67,46 @@ vulnerability and flash wear out.
    the RPL between reboots, will make the device vulnerable to replay attacks
    and not perform the replay protection required by the spec.
 
+Persistent storage
+******************
+
+The mesh stack uses :ref:`Settings Subsystem <settings_api>` for storing the
+device configuration persistently. When the stack configuration changes and
+the change needs to be stored persistently, the stack schedules a work item.
+The delay between scheduling the work item and submitting it to the workqueue
+is defined by :kconfig:option:`CONFIG_BT_MESH_STORE_TIMEOUT`. Except for
+certain cases described below, once the store is scheduled, it can not be
+rescheduled until the work item is processed.
+
+When IV index, Sequence Number or CDB configuration should be stored, the work
+item is submitted to the workqueue without the delay. If the work item was
+previously scheduled, it will be rescheduled without the delay.
+
+The Replay Protection List uses the same work item to store RPL entries. If RPL
+entries store is requested and no other configuration is pending to be stored
+the delay will be set to :kconfig:option:`CONFIG_BT_MESH_RPL_STORE_TIMEOUT`.
+If other stack configuration should be stored, the delay defined by
+:kconfig:option:`CONFIG_BT_MESH_STORE_TIMEOUT` is less than
+:kconfig:option:`CONFIG_BT_MESH_RPL_STORE_TIMEOUT` and the work item was scheduled
+by the Replay Protection List, the work item will be rescheduled.
+
+When the work item is running, the stack will store all pending configuration
+including RPL entries.
+
+Work item execution context
+===========================
+
+The :kconfig:option:`CONFIG_BT_MESH_SETTINGS_WORKQ` configures context from which
+the work item is executed. If the option is enabled, which is by default, the
+stack uses a dedicated cooperative thread to process the work item. This allows
+the stack to process other incoming and outgoing messages as well as other work
+items submitted to the system workqueue, while the stack configuration is being
+stored.
+
+When this option is disabled, the work item is submitted to the system workqueue.
+This means that the system workqueue is blocked for the time required to store
+the stack's configuration. It is not recommended to disable this option as this
+will make the device non-responsive for some noticeable time.
 
 API reference
 **************
