@@ -659,6 +659,16 @@ struct bt_mesh_model_cb {
 	 *  @param model Model this callback belongs to.
 	 */
 	void (*const reset)(struct bt_mesh_model *model);
+
+	/** @brief Callback used to store pending model's user data.
+	 *
+	 *  Triggered by @ref bt_mesh_model_data_store_schedule.
+	 *
+	 *  To store the user data, call @ref bt_mesh_model_data_store.
+	 *
+	 *  @param model Model this callback belongs to.
+	 */
+	void (*const pending_store)(struct bt_mesh_model *model);
 };
 
 /** Vendor model ID */
@@ -838,6 +848,20 @@ static inline bool bt_mesh_model_in_primary(const struct bt_mesh_model *mod)
 int bt_mesh_model_data_store(struct bt_mesh_model *mod, bool vnd,
 			     const char *name, const void *data,
 			     size_t data_len);
+
+/** @brief Schedule the model's user data store in persistent storage.
+ *
+ *  Storing the model's user data in the context of the model's opcode handler,
+ *  or in System Workqueue blocks the Bluetooth mesh from receiving and
+ *  sending new messages. When this function is called, the model's callback
+ *  @ref bt_mesh_model_cb.pending_store is called from the work queue, which
+ *  is used by Bluetooth mesh to store any pending mesh data. The time between
+ *  the function call and the callback is controlled by
+ *  @kconfig{CONFIG_BT_MESH_STORE_TIMEOUT}.
+ *
+ *  @param mod      Mesh model.
+ */
+void bt_mesh_model_data_store_schedule(struct bt_mesh_model *mod);
 
 /** @brief Let a model extend another.
  *
