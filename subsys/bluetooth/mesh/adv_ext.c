@@ -30,6 +30,13 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(bt_mesh_adv_ext);
 
+BUILD_ASSERT(IS_ENABLED(CONFIG_BT_MESH_ADV_EXT_GATT_SEPARATE) && !IS_ENABLED(BT_MESH_GATT_SERVER),
+	     "Separate GATT adv enabled without GATT server support");
+BUILD_ASSERT(IS_ENABLED(CONFIG_BT_MESH_ADV_EXT_FRIEND_SEPARATE) && !IS_ENABLED(BT_MESH_FRIEND),
+	     "Separate Friend adv enabled without Friend feature support");
+BUILD_ASSERT(CONFIG_BT_MESH_RELAY_ADV_SETS > 0 && !IS_ENABLED(BT_MESH_RELAY),
+	     "Separate Relay advs enabled without Relay feature support");
+
 /* Convert from ms to 0.625ms units */
 #define ADV_INT_FAST_MS    20
 

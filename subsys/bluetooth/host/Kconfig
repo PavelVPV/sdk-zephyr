@@ -152,7 +152,6 @@ menu "Bluetooth Host"
 
 if BT_HCI_HOST
 
-rsource "../mesh/Kconfig"
 rsource "../audio/Kconfig"
 
 config BT_HOST_CRYPTO
