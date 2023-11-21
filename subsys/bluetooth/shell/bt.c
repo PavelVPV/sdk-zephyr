@@ -954,18 +954,18 @@ static void bt_ready(int err)
 	}
 
 	shell_print(ctx_shell, "Bluetooth initialized");
-
+#if 0
 	if (IS_ENABLED(CONFIG_SETTINGS) && !no_settings_load) {
 		settings_load();
 		shell_print(ctx_shell, "Settings Loaded");
 	}
-
+#endif
 	if (IS_ENABLED(CONFIG_BT_SMP_OOB_LEGACY_PAIR_ONLY)) {
-		bt_le_oob_set_legacy_flag(true);
+//		bt_le_oob_set_legacy_flag(true);
 	}
 
 #if defined(CONFIG_BT_OBSERVER)
-	bt_le_scan_cb_register(&scan_callbacks);
+//	bt_le_scan_cb_register(&scan_callbacks);
 #endif
 
 #if defined(CONFIG_BT_CONN)
@@ -975,11 +975,11 @@ static void bt_ready(int err)
 #endif /* CONFIG_BT_CONN */
 
 #if defined(CONFIG_BT_PER_ADV_SYNC)
-	bt_le_per_adv_sync_cb_register(&per_adv_sync_cb);
+//	bt_le_per_adv_sync_cb_register(&per_adv_sync_cb);
 #endif /* CONFIG_BT_PER_ADV_SYNC */
 
 #if defined(CONFIG_BT_SMP)
-	bt_conn_auth_info_cb_register(&auth_info_cb);
+//	bt_conn_auth_info_cb_register(&auth_info_cb);
 #endif /* CONFIG_BT_SMP */
 }
 
@@ -990,6 +990,7 @@ static int cmd_init(const struct shell *sh, size_t argc, char *argv[])
 
 	ctx_shell = sh;
 
+#if 0
 	for (size_t argn = 1; argn < argc; argn++) {
 		const char *arg = argv[argn];
 
@@ -1013,7 +1014,10 @@ static int cmd_init(const struct shell *sh, size_t argc, char *argv[])
 				    err);
 		}
 	}
-
+#else
+	bt_ready(0);
+	err = 0;
+#endif
 	return err;
 }
 

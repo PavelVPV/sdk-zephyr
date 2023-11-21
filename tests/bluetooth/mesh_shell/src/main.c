@@ -14,6 +14,8 @@
 #include <zephyr/bluetooth/mesh.h>
 #include <zephyr/bluetooth/mesh/shell.h>
 
+#include "le_pair_init.h"
+
 static struct bt_mesh_cfg_cli cfg_cli;
 
 #if defined(CONFIG_BT_MESH_DFD_SRV)
@@ -42,6 +44,8 @@ struct bt_mesh_large_comp_data_cli large_comp_data_cli;
 #endif
 
 BT_MESH_SHELL_HEALTH_PUB_DEFINE(health_pub);
+
+static struct bt_mesh_le_pair_init le_pair_init;
 
 static struct bt_mesh_model root_models[] = {
 	BT_MESH_MODEL_CFG_SRV,
@@ -107,8 +111,12 @@ static struct bt_mesh_model root_models[] = {
 #endif
 };
 
+static struct bt_mesh_model vnd_root_models[] = {
+	BT_MESH_MODEL_LE_PAIR_INIT(&le_pair_init),
+};
+
 static struct bt_mesh_elem elements[] = {
-	BT_MESH_ELEM(0, root_models, BT_MESH_MODEL_NONE),
+	BT_MESH_ELEM(0, root_models, vnd_root_models),
 };
 
 static const struct bt_mesh_comp comp = {
@@ -116,6 +124,8 @@ static const struct bt_mesh_comp comp = {
 	.elem = elements,
 	.elem_count = ARRAY_SIZE(elements),
 };
+
+int smp_bt_auth_init(struct bt_mesh_le_pair_init *mod);
 
 static void bt_ready(int err)
 {
@@ -144,6 +154,8 @@ static void bt_ready(int err)
 		printk("Use \"prov pb-adv on\" or \"prov pb-gatt on\" to "
 			    "enable advertising\n");
 	}
+
+	smp_bt_auth_init(&le_pair_init);
 }
 
 int main(void)

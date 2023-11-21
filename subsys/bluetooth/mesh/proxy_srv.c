@@ -88,6 +88,17 @@ static struct bt_mesh_proxy_client *find_client(struct bt_conn *conn)
 	return &clients[bt_conn_index(conn)];
 }
 
+bool bt_mesh_proxy_find_client(struct bt_conn *conn)
+{
+	for (int i = 0; i < CONFIG_BT_MAX_CONN; i++) {
+		if (clients[i].cli) {
+			LOG_WRN("Known conn: %p", (void *)clients[i].cli->conn);
+		}
+	}
+
+	return clients[bt_conn_index(conn)].cli != NULL;
+}
+
 static ssize_t gatt_recv(struct bt_conn *conn,
 			 const struct bt_gatt_attr *attr, const void *buf,
 			 uint16_t len, uint16_t offset, uint8_t flags)
@@ -1065,10 +1076,11 @@ static void gatt_connected(struct bt_conn *conn, uint8_t err)
 	bt_conn_get_info(conn, &info);
 	if (info.role != BT_CONN_ROLE_PERIPHERAL || !service_registered ||
 	    info.id != BT_ID_DEFAULT) {
+		LOG_WRN("ignoring connection: %p", (void *)conn);
 		return;
 	}
 
-	LOG_DBG("conn %p err 0x%02x", (void *)conn, err);
+	LOG_ERR("conn %p err 0x%02x", (void *)conn, err);
 
 	client = find_client(conn);
 
