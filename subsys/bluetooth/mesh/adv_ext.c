@@ -505,8 +505,10 @@ int bt_mesh_adv_enable(void)
 		}
 
 		if (IS_ENABLED(CONFIG_BT_LL_SOFTDEVICE) &&
-		    IS_ENABLED(CONFIG_BT_MESH_ADV_EXT_FRIEND_SEPARATE) &&
-		    advs[i].tags == BT_MESH_ADV_TAG_BIT_FRIEND) {
+		    ((IS_ENABLED(CONFIG_BT_MESH_ADV_EXT_FRIEND_SEPARATE) &&
+		    advs[i].tags == BT_MESH_ADV_TAG_BIT_FRIEND) ||
+		    (CONFIG_BT_MESH_RELAY_ADV_SETS > 0 &&
+		     advs[i].tags == BT_MESH_ADV_TAG_BIT_RELAY))) {
 			err = set_adv_randomness(advs[i].instance->handle, 0);
 			if (err) {
 				LOG_ERR("Failed to set zero randomness: %d", err);
