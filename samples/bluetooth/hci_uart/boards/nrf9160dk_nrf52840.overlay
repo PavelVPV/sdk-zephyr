@@ -13,6 +13,10 @@
 	hw-flow-control;
 };
 
+&gpiote {
+	interrupts = <6 NRF_DEFAULT_IRQ_PRIORITY>;
+};
+
 / {
 	chosen {
 		zephyr,bt-c2h-uart=&uart1;
