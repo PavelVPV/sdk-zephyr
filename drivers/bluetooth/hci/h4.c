@@ -102,6 +102,8 @@ static inline void h4_get_type(void)
 		LOG_ERR("Unknown H:4 type 0x%02x", rx.type);
 		rx.type = H4_NONE;
 	}
+
+	LOG_DBG("h5_get_type: %d, rem: %d, hdr_len: %d", rx.type, rx.remaining, rx.hdr_len);
 }
 
 static void h4_read_hdr(void)
@@ -482,6 +484,7 @@ static void bt_uart_isr(const struct device *unused, void *user_data)
 static int h4_send(struct net_buf *buf)
 {
 	LOG_DBG("buf %p type %u len %u", buf, bt_buf_get_type(buf), buf->len);
+	LOG_HEXDUMP_DBG(buf->data, buf->len, "send");
 
 	net_buf_put(&tx.fifo, buf);
 	uart_irq_tx_enable(h4_dev);

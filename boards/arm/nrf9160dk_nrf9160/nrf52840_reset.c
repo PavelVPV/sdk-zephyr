@@ -18,13 +18,20 @@
 #define RESET_GPIO_PIN   DT_GPIO_PIN(RESET_NODE, gpios)
 #define RESET_GPIO_FLAGS DT_GPIO_FLAGS(RESET_NODE, gpios)
 
+#define LOG_LEVEL 4
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(nrf52840_reset);
+
 int bt_hci_transport_setup(const struct device *h4)
 {
 	int err;
 	char c;
 	const struct device *const port = DEVICE_DT_GET(RESET_GPIO_CTRL);
 
+	LOG_DBG("reset");
+
 	if (!device_is_ready(port)) {
+		LOG_ERR("-EIO");
 		return -EIO;
 	}
 
@@ -32,6 +39,7 @@ int bt_hci_transport_setup(const struct device *h4)
 	err = gpio_pin_configure(port, RESET_GPIO_PIN,
 				 RESET_GPIO_FLAGS | GPIO_OUTPUT_INACTIVE);
 	if (err) {
+		LOG_ERR("err: %d:%d", err, __LINE__);
 		return err;
 	}
 
@@ -41,6 +49,7 @@ int bt_hci_transport_setup(const struct device *h4)
 	 */
 	err = gpio_pin_set(port, RESET_GPIO_PIN, 1);
 	if (err) {
+		LOG_ERR("err: %d:%d", err, __LINE__);
 		return err;
 	}
 
@@ -59,6 +68,7 @@ int bt_hci_transport_setup(const struct device *h4)
 	/* We are ready, let the nRF52840 run to main */
 	err = gpio_pin_set(port, RESET_GPIO_PIN, 0);
 	if (err) {
+		LOG_ERR("err: %d:%d", err, __LINE__);
 		return err;
 	}
 

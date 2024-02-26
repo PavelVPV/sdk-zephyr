@@ -29,7 +29,7 @@
 #include <zephyr/bluetooth/buf.h>
 #include <zephyr/bluetooth/hci_raw.h>
 
-#define LOG_LEVEL 4
+#define LOG_LEVEL 3
 #define LOG_MODULE_NAME hci_uart
 LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
@@ -68,6 +68,7 @@ static int h4_read(const struct device *uart, uint8_t *buf, size_t len)
 	int rx = uart_fifo_read(uart, buf, len);
 
 	LOG_DBG("read %d req %d", rx, len);
+	LOG_HEXDUMP_DBG(buf, len, "read");
 
 	return rx;
 }
@@ -214,6 +215,7 @@ static void tx_isr(void)
 
 	if (!buf) {
 		buf = net_buf_get(&uart_tx_queue, K_NO_WAIT);
+		LOG_HEXDUMP_DBG(buf->data, buf->len, "buf to tx");
 		if (!buf) {
 			uart_irq_tx_disable(hci_uart_dev);
 			return;
@@ -221,10 +223,12 @@ static void tx_isr(void)
 	}
 
 	len = uart_fifo_fill(hci_uart_dev, buf->data, buf->len);
+	LOG_DBG("len sent: %d", len);
 	net_buf_pull(buf, len);
 	if (!buf->len) {
 		net_buf_unref(buf);
 		buf = NULL;
+		LOG_DBG("buf reset");
 	}
 }
 
@@ -255,6 +259,7 @@ static void tx_thread(void *p1, void *p2, void *p3)
 
 		/* Wait until a buffer is available */
 		buf = net_buf_get(&tx_queue, K_FOREVER);
+		LOG_HEXDUMP_DBG(buf->data, buf->len, "to controller");
 		/* Pass buffer to the stack */
 		err = bt_send(buf);
 		if (err) {
@@ -273,6 +278,7 @@ static int h4_send(struct net_buf *buf)
 {
 	LOG_DBG("buf %p type %u len %u", buf, bt_buf_get_type(buf),
 		    buf->len);
+	LOG_HEXDUMP_DBG(buf->data, buf->len, "send");
 
 	net_buf_put(&uart_tx_queue, buf);
 	uart_irq_tx_enable(hci_uart_dev);

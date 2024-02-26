@@ -11,7 +11,7 @@
 #include <zephyr/logging/log.h>
 #include <hal/nrf_gpio.h>
 
-LOG_MODULE_REGISTER(board_control, CONFIG_BOARD_NRF9160DK_LOG_LEVEL);
+LOG_MODULE_REGISTER(board_control, 4);//CONFIG_BOARD_NRF9160DK_LOG_LEVEL);
 
 #define GET_CTLR(name, prop, idx) \
 	DT_GPIO_CTLR_BY_IDX(DT_NODELABEL(name), prop, idx)
@@ -175,7 +175,7 @@ static int init(void)
 		flags |= (cfg->on ? GPIO_OUTPUT_ACTIVE
 				  : GPIO_OUTPUT_INACTIVE);
 		rc = gpio_pin_configure(cfg->gpio, cfg->pin, flags);
-#if defined(CONFIG_LOG)
+#if 1//defined(CONFIG_LOG)
 		LOG_DBG("Configuring P%d.%02d with flags: 0x%08x",
 			cfg->port, cfg->pin, flags);
 		if (rc) {
