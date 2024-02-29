@@ -18,6 +18,104 @@
 /* Default net & app key values, unless otherwise specified */
 extern const uint8_t bt_mesh_shell_default_key[16];
 
+static int cmd_get_info(const struct shell *sh, size_t argc, char *argv[])
+{
+	int err;
+
+	/* Request Config Composition Data Status message. */
+	err = bt_mesh_cfg_cli_comp_data_get(bt_mesh_shell_target_ctx.net_idx,
+					bt_mesh_shell_target_ctx.dst, 0, NULL, NULL);
+	if (err) {
+		shell_error(sh, "Getting composition failed (err %d)", err);
+		return 0;
+	}
+
+	/* Request Config Beacon Get message. */
+	err = bt_mesh_cfg_cli_beacon_get(bt_mesh_shell_target_ctx.net_idx,
+				     bt_mesh_shell_target_ctx.dst, NULL);
+	if (err) {
+		shell_error(sh, "Getting Beacon failed (err %d)", err);
+		return 0;
+	}
+
+	/* Request Config TTL Status message. */
+	err = bt_mesh_cfg_cli_ttl_get(bt_mesh_shell_target_ctx.net_idx,
+				  bt_mesh_shell_target_ctx.dst, NULL);
+	if (err) {
+		shell_error(sh, "Getting TTL failed (err %d)", err);
+		return 0;
+	}
+
+	/* Request Config Friend Status message. */
+	err = bt_mesh_cfg_cli_friend_get(bt_mesh_shell_target_ctx.net_idx,
+				     bt_mesh_shell_target_ctx.dst, NULL);
+	if (err) {
+		shell_error(sh, "Getting Friend failed (err %d)", err);
+		return 0;
+	}
+
+	/* Request Config GATT Proxy Status message. */
+	err = bt_mesh_cfg_cli_gatt_proxy_get(bt_mesh_shell_target_ctx.net_idx,
+					 bt_mesh_shell_target_ctx.dst, NULL);
+	if (err) {
+		shell_error(sh, "Getting GATT Proxy failed (err %d)", err);
+		return 0;
+	}
+
+	/* Request Network Transmit Status message. */
+	err = bt_mesh_cfg_cli_net_transmit_get(bt_mesh_shell_target_ctx.net_idx,
+					   bt_mesh_shell_target_ctx.dst, NULL);
+	if (err) {
+		shell_error(sh, "Getting Network Transmit State failed (err %d)", err);
+		return 0;
+	}
+
+	/* Request Config Relay Status message. */
+	err = bt_mesh_cfg_cli_relay_get(bt_mesh_shell_target_ctx.net_idx,
+				    bt_mesh_shell_target_ctx.dst, NULL, NULL);
+	if (err) {
+		shell_error(sh, "Getting Relay failed (err %d)", err);
+		return 0;
+	}
+
+	/* Raquest Config NetKey List message. */
+	err = bt_mesh_cfg_cli_net_key_get(bt_mesh_shell_target_ctx.net_idx,
+				      bt_mesh_shell_target_ctx.dst, NULL, NULL);
+	if (err) {
+		shell_error(sh, "Getting NetKey List failed (err %d)", err);
+		return 0;
+	}
+
+	/* Raquest Config AppKey List message. */
+	err = bt_mesh_cfg_cli_app_key_get(bt_mesh_shell_target_ctx.net_idx,
+				      bt_mesh_shell_target_ctx.dst, bt_mesh_shell_target_ctx.net_idx, NULL, NULL, NULL);
+	if (err) {
+		shell_error(sh, "Getting AppKey List failed (err %d)", err);
+		return 0;
+	}
+
+	/* Request Heartbeat Subscription Status message. */
+	err = bt_mesh_cfg_cli_hb_sub_get(bt_mesh_shell_target_ctx.net_idx,
+					 bt_mesh_shell_target_ctx.dst, NULL, NULL);
+	if (err) {
+		shell_error(sh, "Getting Heartbeat Subscription Status failed (err %d)", err);
+		return 0;
+	}
+
+	/* Request Heartbeat Publication Status message. */
+	err = bt_mesh_cfg_cli_hb_pub_get(bt_mesh_shell_target_ctx.net_idx,
+					 bt_mesh_shell_target_ctx.dst, NULL, NULL);
+	if (err) {
+		shell_error(sh, "Getting Heartbeat Publication Status failed (err %d)", err);
+		return 0;
+	}
+
+	shell_print(sh, "All messages are pushed");
+
+	return 0;
+}
+
+
 static int cmd_reset(const struct shell *sh, size_t argc, char *argv[])
 {
 	int err;
@@ -1889,6 +1987,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 	SHELL_CMD(appkey, &appkey_cmds, "Appkey config commands", bt_mesh_shell_mdl_cmds_help),
 	SHELL_CMD(netkey, &netkey_cmds, "Netkey config commands", bt_mesh_shell_mdl_cmds_help),
 	SHELL_CMD(model, &model_cmds, "Model config commands", bt_mesh_shell_mdl_cmds_help),
+	SHELL_CMD_ARG(get-info, NULL, NULL, cmd_get_info, 1, 0),
 	SHELL_SUBCMD_SET_END);
 
 SHELL_SUBCMD_ADD((mesh, models), cfg, &cfg_cli_cmds, "Config Cli commands",

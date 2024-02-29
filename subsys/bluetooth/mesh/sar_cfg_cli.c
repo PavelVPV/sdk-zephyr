@@ -129,12 +129,10 @@ int bt_mesh_sar_cfg_cli_transmitter_get(uint16_t net_idx, uint16_t addr,
 					struct bt_mesh_sar_tx *rsp)
 {
 	BT_MESH_MODEL_BUF_DEFINE(msg, OP_SAR_CFG_TX_GET, 0);
-	struct bt_mesh_msg_ctx ctx = {
-		.net_idx = net_idx,
-		.app_idx = BT_MESH_KEY_DEV,
-		.addr = addr,
-		.send_ttl = BT_MESH_TTL_DEFAULT,
-	};
+	/* Fixes SAR Cfg Client devkey selection. Fix is in
+	 * https://github.com/zephyrproject-rtos/zephyr/pull/69600
+	 */
+	struct bt_mesh_msg_ctx ctx = BT_MESH_MSG_CTX_INIT_DEV(net_idx, addr);
 	int err;
 
 	err = bt_mesh_msg_ack_ctx_prepare(&cli->ack_ctx, OP_SAR_CFG_TX_STATUS, addr, rsp);
@@ -159,12 +157,10 @@ int bt_mesh_sar_cfg_cli_transmitter_set(uint16_t net_idx, uint16_t addr,
 					struct bt_mesh_sar_tx *rsp)
 {
 	BT_MESH_MODEL_BUF_DEFINE(msg, OP_SAR_CFG_TX_SET, BT_MESH_SAR_TX_LEN);
-	struct bt_mesh_msg_ctx ctx = {
-		.net_idx = net_idx,
-		.app_idx = BT_MESH_KEY_DEV,
-		.addr = addr,
-		.send_ttl = BT_MESH_TTL_DEFAULT,
-	};
+	/* Fixes SAR Cfg Client devkey selection. Fix is in
+	 * https://github.com/zephyrproject-rtos/zephyr/pull/69600
+	 */
+	struct bt_mesh_msg_ctx ctx = BT_MESH_MSG_CTX_INIT_DEV(net_idx, addr);
 	int err;
 
 	err = bt_mesh_msg_ack_ctx_prepare(&cli->ack_ctx, OP_SAR_CFG_TX_STATUS, addr, rsp);
@@ -189,12 +185,10 @@ int bt_mesh_sar_cfg_cli_receiver_get(uint16_t net_idx, uint16_t addr,
 				     struct bt_mesh_sar_rx *rsp)
 {
 	BT_MESH_MODEL_BUF_DEFINE(msg, OP_SAR_CFG_RX_GET, 0);
-	struct bt_mesh_msg_ctx ctx = {
-		.net_idx = net_idx,
-		.app_idx = BT_MESH_KEY_DEV,
-		.addr = addr,
-		.send_ttl = BT_MESH_TTL_DEFAULT,
-	};
+	/* Fixes SAR Cfg Client devkey selection. Fix is in
+	 * https://github.com/zephyrproject-rtos/zephyr/pull/69600
+	 */
+	struct bt_mesh_msg_ctx ctx = BT_MESH_MSG_CTX_INIT_DEV(net_idx, addr);
 	int err;
 
 	err = bt_mesh_msg_ack_ctx_prepare(&cli->ack_ctx, OP_SAR_CFG_RX_STATUS, addr, rsp);
@@ -219,12 +213,10 @@ int bt_mesh_sar_cfg_cli_receiver_set(uint16_t net_idx, uint16_t addr,
 				     struct bt_mesh_sar_rx *rsp)
 {
 	BT_MESH_MODEL_BUF_DEFINE(msg, OP_SAR_CFG_RX_SET, BT_MESH_SAR_RX_LEN);
-	struct bt_mesh_msg_ctx ctx = {
-		.net_idx = net_idx,
-		.app_idx = BT_MESH_KEY_DEV,
-		.addr = addr,
-		.send_ttl = BT_MESH_TTL_DEFAULT,
-	};
+	/* Fixes SAR Cfg Client devkey selection. Fix is in
+	 * https://github.com/zephyrproject-rtos/zephyr/pull/69600
+	 */
+	struct bt_mesh_msg_ctx ctx = BT_MESH_MSG_CTX_INIT_DEV(net_idx, addr);
 	int err;
 
 	err = bt_mesh_msg_ack_ctx_prepare(&cli->ack_ctx, OP_SAR_CFG_RX_STATUS, addr, rsp);
