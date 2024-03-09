@@ -433,6 +433,7 @@ static inline void process_tx(void)
 		net_buf_pull(tx.buf, bytes);
 	}
 
+	__ASSERT_NO_MSG(tx.buf);
 	if (tx.buf->len) {
 		return;
 	}
