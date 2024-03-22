@@ -33,6 +33,59 @@
 #define LOG_MODULE_NAME hci_uart
 LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
+#include <hal/nrf_mwu.h>
+#include <soc.h>
+
+#define NRF_PX(port) ((port == 0) ? NRF_P0 : NRF_P1)
+
+static inline void pin_set(uint32_t port, uint32_t pin)
+{
+	NRF_GPIO_Type *gpio = NRF_PX(port);
+	gpio->OUTSET = 1 << pin;
+	__asm("NOP");
+	__asm("NOP");
+	__asm("NOP");
+	__asm("NOP");
+}
+
+static inline void pin_clr(uint32_t port, uint32_t pin)
+{
+	NRF_GPIO_Type *gpio = NRF_PX(port);
+	gpio->OUTCLR = 1 << pin;
+	__asm("NOP");
+	__asm("NOP");
+	__asm("NOP");
+	__asm("NOP");
+}
+
+static inline void pin_toggle(uint32_t port, uint32_t pin, uint32_t count)
+{
+	for (uint32_t i = 0; i < count; i++) {
+		pin_set(port, pin);
+		pin_clr(port, pin);
+	}
+}
+
+static void pin_cfg(uint32_t port, uint32_t pin)
+{
+	static uint32_t pins_configured_mask[GPIO_COUNT];
+	if (pins_configured_mask[port] & (1 << pin)) {
+		return;
+	}
+
+	pins_configured_mask[port] |= (1 << pin);
+
+	NRF_GPIO_Type *gpio = NRF_PX(port);
+	gpio->PIN_CNF[pin] = 0;
+	gpio->PIN_CNF[pin] |= (GPIO_PIN_CNF_DIR_Output << GPIO_PIN_CNF_DIR_Pos) & GPIO_PIN_CNF_DIR_Msk;
+	gpio->PIN_CNF[pin] |= (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos) & GPIO_PIN_CNF_PULL_Msk;
+	gpio->PIN_CNF[pin] |= (GPIO_PIN_CNF_DRIVE_S0S1 << GPIO_PIN_CNF_DRIVE_Pos) & GPIO_PIN_CNF_DRIVE_Msk;
+	gpio->PIN_CNF[pin] |= (GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos) & GPIO_PIN_CNF_SENSE_Msk;
+	gpio->OUTCLR = 1 << pin;
+
+	pin_toggle(port, pin, 1);
+}
+
 static const struct device *const hci_uart_dev =
 	DEVICE_DT_GET(DT_CHOSEN(zephyr_bt_c2h_uart));
 static K_THREAD_STACK_DEFINE(tx_thread_stack, CONFIG_BT_HCI_TX_STACK_SIZE);
@@ -207,25 +260,83 @@ static void rx_isr(void)
 	} while (read);
 }
 
+static atomic_t in_tx_isr;
+static volatile uint32_t cnt = 0;
+
+#define MWU_WATCH() \
+	do { \
+		unsigned int key = irq_lock(); \
+		__ASSERT_NO_MSG(cnt < 0xffff); \
+		if (!cnt) { \
+			nrf_mwu_region_watch_enable(NRF_MWU, NRF_MWU_WATCH_REGION0_WRITE); \
+			__DMB(); \
+			__ISB(); \
+			__DSB(); \
+		} \
+		cnt++; \
+		irq_unlock(key); \
+	} while (false)
+
+#define MWU_UNWATCH() \
+	do { \
+		unsigned int key = irq_lock(); \
+		cnt--; \
+		if (!cnt) { \
+			nrf_mwu_region_watch_disable(NRF_MWU, NRF_MWU_WATCH_REGION0_WRITE); \
+			__DMB(); \
+			__ISB(); \
+			__DSB(); \
+		} \
+		irq_unlock(key); \
+	} while (false)
+
 static void tx_isr(void)
 {
 	static struct net_buf *buf;
+	static volatile bool once = true;
 	int len;
+
+	atomic_inc(&in_tx_isr);
+
+	pin_toggle(1, 4, 1);
+
+	if (once) {
+		nrf_mwu_user_region_range_set(NRF_MWU, 0, (uint32_t)&buf, (uint32_t)&buf);
+		once = false;
+	}
 
 	if (!buf) {
 		buf = net_buf_get(&uart_tx_queue, K_NO_WAIT);
 		if (!buf) {
 			uart_irq_tx_disable(hci_uart_dev);
+
+			pin_toggle(1, 4, 3);
+
+			atomic_dec(&in_tx_isr);
 			return;
 		}
 	}
 
+	MWU_WATCH();
+
+	__ASSERT_NO_MSG(atomic_get(&in_tx_isr) == 1);
 	len = uart_fifo_fill(hci_uart_dev, buf->data, buf->len);
+	__ASSERT_NO_MSG(atomic_get(&in_tx_isr) == 1);
 	net_buf_pull(buf, len);
+	__ASSERT_NO_MSG(atomic_get(&in_tx_isr) == 1);
 	if (!buf->len) {
 		net_buf_unref(buf);
+
+		MWU_UNWATCH();
+
 		buf = NULL;
+	} else {
+		MWU_UNWATCH();
 	}
+
+	__ASSERT_NO_MSG(atomic_get(&in_tx_isr) == 1);
+	atomic_dec(&in_tx_isr);
+	pin_toggle(1, 4, 2);
 }
 
 static void bt_uart_isr(const struct device *unused, void *user_data)
@@ -360,6 +471,26 @@ int main(void)
 	/* incoming events and data from the controller */
 	static K_FIFO_DEFINE(rx_queue);
 	int err;
+
+	pin_cfg(1, 4);
+	pin_cfg(1, 2);
+	pin_cfg(1,11);
+	pin_cfg(1,13);
+	pin_cfg(1,15);
+
+	pin_set(1, 4);
+	pin_set(1, 2);
+	pin_set(1,11);
+	pin_set(1,13);
+	pin_set(1,15);
+
+	pin_clr(1, 4);
+	pin_clr(1, 2);
+	pin_clr(1,11);
+	pin_clr(1,13);
+	pin_clr(1,15);
+
+	nrf_mwu_nmi_enable(NRF_MWU, NRF_MWU_INT_REGION0_WRITE_MASK);
 
 	LOG_DBG("Start");
 	__ASSERT(hci_uart_dev, "UART device is NULL");
