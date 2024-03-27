@@ -55,6 +55,72 @@ struct slot_search_ctx {
 	bool failed;
 };
 
+struct settings_start_params {
+	uint16_t app_idx;
+	uint16_t timeout_base;
+	uint16_t slot_idx;
+	uint16_t group;
+	uint8_t xfer_mode : 2; // not needed, should be stored in dfu cli
+	uint8_t apply : 1;
+	uint8_t ttl;
+};
+
+static void dfd_start_params_store(struct bt_mesh_dfd_srv *srv,
+				   struct bt_mesh_dfd_start_params *params)
+{
+	struct settings_start_params start_params;
+	int err;
+
+	start_params.app_idx = params->app_idx;
+	start_params.timeout_base = params->timeout_base;
+	start_params.slot_idx = params->slot_idx;
+	start_params.group = params->group;
+	start_params.xfer_mode = params->xfer_mode;
+	start_params.apply = params->apply;
+	start_params.ttl = params->ttl;
+
+	err = bt_mesh_model_data_store(srv->mod, false, "s", &start_params, sizeof(start_params));
+	if (err) {
+		LOG_ERR("Failed to store start params (err: %d)", err);
+	}
+}
+
+static void dfd_receivers_store(struct bt_mesh_dfd_srv *srv)
+{
+	uint16_t addrs[CONFIG_BT_MESH_DFD_SRV_TARGETS_MAX + 1];
+	int err;
+
+	addrs[0] = srv->target_cnt;
+	for (int i = 0; i < srv->target_cnt; ++i) {
+		addrs[i + 1] = srv->targets[i].blob.addr;
+	}
+
+	err = bt_mesh_model_data_store(srv->mod, false, "r", addrs, sizeof(addrs));
+	if (err) {
+		LOG_ERR("Failed to store receivers (err: %d)", err);
+	}
+}
+
+static void dfd_phase_store(struct bt_mesh_dfd_srv *srv)
+{
+	int err;
+
+	err = bt_mesh_model_data_store(srv->mod, false, "p", &srv->phase, sizeof(uint8_t));
+	if (err) {
+		LOG_ERR("Failed to store phase (err: %d)", err);
+	}
+}
+
+static void dfd_settings_clear(struct bt_mesh_dfd_srv *srv)
+{
+	int err;
+
+	err = bt_mesh_model_data_store(srv->mod, false, NULL, NULL, 0);
+	if (err) {
+		LOG_ERR("Failed to clear settings (err: %d)", err);
+	}
+}
+
 static void dfd_phase_set(struct bt_mesh_dfd_srv *srv,
 			  enum bt_mesh_dfd_phase new_phase)
 {
@@ -63,6 +129,8 @@ static void dfd_phase_set(struct bt_mesh_dfd_srv *srv,
 	if (srv->cb && srv->cb->phase) {
 		srv->cb->phase(srv, srv->phase);
 	}
+
+	dfd_phase_store(srv);
 }
 
 static struct bt_mesh_dfu_target *target_get(struct bt_mesh_dfd_srv *srv,
@@ -950,9 +1018,99 @@ static void dfd_srv_reset(const struct bt_mesh_model *mod)
 	bt_mesh_dfu_slot_del_all();
 }
 
+static int dfd_srv_settings_set(const struct bt_mesh_model *mod, const char *name,
+				size_t len_rd, settings_read_cb read_cb,
+				void *cb_arg)
+{
+	struct bt_mesh_dfd_srv *srv = mod->rt->user_data;
+	ssize_t len;
+	const char *next;
+	int len;
+
+	if (!name) {
+		LOG_ERR("Insufficient number of arguments");
+		return -ENOENT;
+	}
+
+	len = settings_name_next(name, &next);
+	if (!next) {
+		LOG_ERR("Insufficient number of arguments");
+		return -ENOENT;
+	}
+
+	// TODO:
+	// - How to restore transfer phase?
+	// - What should be stored in DFU client?
+	if (!strcmp(next, "s", 1)) {
+		struct settings_start_params params;
+
+		if (len_rd < sizeof(struct settings_start_params)) {
+			return -EINVAL;
+		}
+
+		len = read_cb(cb_arg, &start_params, sizeof(start_params));
+		if (len < 0) {
+			return len;
+		}
+
+		srv->slot_idx = params->slot_idx;
+		srv->inputs.app_idx = params->app_idx;
+		srv->inputs.timeout_base = params->timeout_base;
+		srv->inputs.group = params->group;
+		srv->inputs.ttl = params->ttl;
+		srv->apply = params->apply;
+
+		LOG_DBG("Restored slot_idx: %d, app_idx: %d, timeout_base: %d, group: %d, ttl: %d,"
+			" apply: %d", srv->slot_idx, srv->inputs.app_idx, srv->inputs.timeout_base,
+			srv->inputs.group, srv->inputs.ttl, srv->apply);
+	} else if (!strcmp(next, "p")) {
+		uint8_t phase;
+
+		if (len_rd < sizeof(phase)) {
+			return -EINVAL;
+		}
+
+		len = read_cb(cb_arg, &phase, sizeof(phase));
+		if (len < 0) {
+			return len;
+		}
+
+		// FIXME: Should avoid storing
+		srv->phase = phase;
+		LOG_DBG("Restored phase: %u", srv->phase);
+	} else if (!strcmp(next, "r")) {
+		uint16_t addrs[CONFIG_BT_MESH_DFD_SRV_TARGETS_MAX + 1];
+
+		if (len_rd < sizeof(addrs)) {
+			return -EINVAL;
+		}
+
+		len = read_cb(cb_arg, addrs, sizeof(addrs));
+		if (len < 0) {
+			return len;
+		}
+
+		sys_slist_init(&srv->inputs.targets);
+		for (i = 0; i < MIN(srv->target_cnt, addrs[0]); i++) {
+			memset(&srv->targets[i].blob, 0, sizeof(struct bt_mesh_blob_target));
+			memset(&srv->pull_ctxs[i], 0, sizeof(struct bt_mesh_blob_target_pull));
+			srv->targets[i].blob.addr = addrs[i + 1];
+			srv->targets[i].blob.pull = &srv->pull_ctxs[i];
+
+			sys_slist_append(&srv->inputs.targets, &srv->targets[i].blob.n);
+		}
+	} else {
+		LOG_ERR("Unknown key %s", next);
+		return -ENOENT;
+	}
+
+	return 0;
+}
+
 const struct bt_mesh_model_cb _bt_mesh_dfd_srv_cb = {
 	.init = dfd_srv_init,
 	.reset = dfd_srv_reset,
+	.settings_set = dfu_srv_settings_set,
 };
 
 enum bt_mesh_dfd_status bt_mesh_dfd_srv_receiver_add(struct bt_mesh_dfd_srv *srv, uint16_t addr,
@@ -1088,6 +1246,9 @@ enum bt_mesh_dfd_status bt_mesh_dfd_srv_start(struct bt_mesh_dfd_srv *srv,
 		dfd_phase_set(srv, BT_MESH_DFD_PHASE_IDLE);
 		return BT_MESH_DFD_ERR_INTERNAL;
 	}
+
+	dfd_start_params_store(srv, params);
+	dfd_receivers_store(srv);
 
 	return BT_MESH_DFD_SUCCESS;
 }
