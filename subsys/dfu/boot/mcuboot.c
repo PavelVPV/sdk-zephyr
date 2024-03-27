@@ -186,6 +186,13 @@ int boot_request_upgrade_multi(int image_index, int permanent)
 	return 0;
 }
 
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+
+#pragma message("The value of FLASH_AREA_IMAGE_PRIMARY is: " TOSTRING(FLASH_AREA_IMAGE_PRIMARY))
+#pragma message("The value of FLASH_AREA_IMAGE_SECONDARY is: " TOSTRING(FLASH_AREA_IMAGE_SECONDARY))
+#pragma message("The value of ACTIVE_SLOT_FLASH_AREA_ID is: " TOSTRING(ACTIVE_SLOT_FLASH_AREA_ID))
+
 bool boot_is_img_confirmed(void)
 {
 	struct boot_swap_state state;

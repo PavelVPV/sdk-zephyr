@@ -50,6 +50,47 @@ static struct fs_mount_t littlefs_mnt = {
 };
 #endif
 
+#include <zephyr/shell/shell.h>
+#include <zephyr/dfu/mcuboot.h>
+
+static int cmd_request_update(const struct shell *sh, size_t argc, char *argv[])
+{
+	int err;
+
+	err = boot_request_upgrade(BOOT_UPGRADE_TEST);
+	shell_print(sh, "boot_request_upgrade() returned %d", err);
+
+	return 0;
+}
+
+static int cmd_img_confirm(const struct shell *sh, size_t argc, char *argv[])
+{
+	int err;
+
+	err = boot_write_img_confirmed();
+	shell_print(sh, "boot_write_img_confirmed() returned %d", err);
+
+	return 0;
+}
+
+static int cmd_is_confirmed(const struct shell *sh, size_t argc, char *argv[])
+{
+	bool is_confirmed;
+
+	is_confirmed = boot_is_img_confirmed();
+	shell_print(sh, "boot_is_img_confirmed() returned %d", is_confirmed);
+
+	return 0;
+}
+
+SHELL_STATIC_SUBCMD_SET_CREATE(boot_cmds,
+	SHELL_CMD_ARG(request-update, NULL, NULL, cmd_request_update, 1, 0),
+	SHELL_CMD_ARG(img-confirm, NULL, NULL, cmd_img_confirm, 1, 0),
+	SHELL_CMD_ARG(is-confirmed, NULL, NULL, cmd_is_confirmed, 1, 0),
+	SHELL_SUBCMD_SET_END);
+
+SHELL_CMD_ARG_REGISTER(boot, &boot_cmds, "boot commands", NULL, 1, 1);
+
 int main(void)
 {
 	int rc = STATS_INIT_AND_REG(smp_svr_stats, STATS_SIZE_32,
