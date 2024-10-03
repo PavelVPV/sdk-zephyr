@@ -455,7 +455,13 @@ struct bt_conn *bt_conn_lookup_state_le(uint8_t id, const bt_addr_le_t *peer,
 					const bt_conn_state_t state);
 
 /* Set connection object in certain state and perform action related to state */
-void bt_conn_set_state(struct bt_conn *conn, bt_conn_state_t state);
+void __bt_conn_set_state(struct bt_conn *conn, bt_conn_state_t state);
+
+#define bt_conn_set_state(conn, state) \
+	do { \
+		LOG_WRN("%s:%s:%d", __FILE__, __func__, __LINE__); \
+		__bt_conn_set_state(conn, state); \
+	} while (0)
 
 void bt_conn_connected(struct bt_conn *conn);
 

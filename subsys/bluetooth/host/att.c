@@ -722,7 +722,8 @@ static struct net_buf *bt_att_chan_create_pdu(struct bt_att_chan *chan, uint8_t 
 		timeout = BT_ATT_TIMEOUT;
 		break;
 	default:
-		timeout = K_FOREVER;
+		timeout = BT_ATT_TIMEOUT;
+//		timeout = K_FOREVER;
 	}
 
 	/* This will reserve headspace for lower layers */
@@ -3000,7 +3001,8 @@ static struct bt_att *att_get(struct bt_conn *conn)
 
 	att_chan = ATT_CHAN(chan);
 	if (!atomic_test_bit(att_chan->flags, ATT_CONNECTED)) {
-		LOG_ERR("ATT channel not connected");
+		//LOG_ERR("ATT channel not connected");
+		//while(1);
 		return NULL;
 	}
 
@@ -3026,7 +3028,7 @@ struct net_buf *bt_att_create_pdu(struct bt_conn *conn, uint8_t op, size_t len)
 		return bt_att_chan_create_pdu(chan, op, len);
 	}
 
-	LOG_WRN("No ATT channel for MTU %zu", len + sizeof(op));
+//	LOG_WRN("No ATT channel for MTU %zu", len + sizeof(op));
 
 	return NULL;
 }
@@ -3205,6 +3207,7 @@ static void bt_att_disconnected(struct bt_l2cap_chan *chan)
 
 	/* Don't reset if there are still channels to be used */
 	if (!sys_slist_is_empty(&att->chans)) {
+		LOG_WRN("Channels in use");
 		return;
 	}
 

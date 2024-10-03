@@ -750,11 +750,11 @@ static void conn_destroy(struct bt_conn *conn, void *data)
 {
 	if (conn->state == BT_CONN_CONNECTED ||
 	    conn->state == BT_CONN_DISCONNECTING) {
-		bt_conn_set_state(conn, BT_CONN_DISCONNECT_COMPLETE);
+		__bt_conn_set_state(conn, BT_CONN_DISCONNECT_COMPLETE);
 	}
 
 	if (conn->state != BT_CONN_DISCONNECTED) {
-		bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
+		__bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
 	}
 }
 
@@ -1115,11 +1115,11 @@ struct bt_conn *conn_lookup_handle(struct bt_conn *conns, size_t size,
 	return NULL;
 }
 
-void bt_conn_set_state(struct bt_conn *conn, bt_conn_state_t state)
+void __bt_conn_set_state(struct bt_conn *conn, bt_conn_state_t state)
 {
 	bt_conn_state_t old_state;
 
-	LOG_DBG("%s -> %s", state2str(conn->state), state2str(state));
+	LOG_ERR("%s -> %s", state2str(conn->state), state2str(state));
 
 	if (conn->state == state) {
 		LOG_WRN("no transition %s", state2str(state));
@@ -1644,7 +1644,7 @@ static int conn_disconnect(struct bt_conn *conn, uint8_t reason)
 	}
 
 	if (conn->state == BT_CONN_CONNECTED) {
-		bt_conn_set_state(conn, BT_CONN_DISCONNECTING);
+		__bt_conn_set_state(conn, BT_CONN_DISCONNECTING);
 	}
 
 	return 0;
@@ -1667,7 +1667,7 @@ int bt_conn_disconnect(struct bt_conn *conn, uint8_t reason)
 	switch (conn->state) {
 	case BT_CONN_SCAN_BEFORE_INITIATING:
 		conn->err = reason;
-		bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
+		__bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
 		if (IS_ENABLED(CONFIG_BT_CENTRAL)) {
 			return bt_le_scan_user_add(BT_LE_SCAN_USER_CONN);
 		}
@@ -2157,7 +2157,7 @@ struct bt_conn *bt_conn_create_br(const bt_addr_t *peer,
 		return NULL;
 	}
 
-	bt_conn_set_state(conn, BT_CONN_INITIATING);
+	__bt_conn_set_state(conn, BT_CONN_INITIATING);
 	conn->role = BT_CONN_ROLE_CENTRAL;
 
 	return conn;
@@ -3281,13 +3281,13 @@ int bt_conn_le_create_auto(const struct bt_conn_le_create_param *create_param,
 	create_param_setup(create_param);
 
 	atomic_set_bit(conn->flags, BT_CONN_AUTO_CONNECT);
-	bt_conn_set_state(conn, BT_CONN_INITIATING_FILTER_LIST);
+	__bt_conn_set_state(conn, BT_CONN_INITIATING_FILTER_LIST);
 
 	err = bt_le_create_conn(conn);
 	if (err) {
 		LOG_ERR("Failed to start filtered scan");
 		conn->err = 0;
-		bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
+		__bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
 		bt_conn_unref(conn);
 		return err;
 	}
@@ -3318,7 +3318,7 @@ int bt_conn_create_auto_stop(void)
 		return -EINVAL;
 	}
 
-	bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
+	__bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
 	bt_conn_unref(conn);
 
 	err = bt_le_create_conn_cancel();
@@ -3412,12 +3412,12 @@ int bt_conn_le_create(const bt_addr_le_t *peer, const struct bt_conn_le_create_p
 #if defined(CONFIG_BT_SMP)
 	if (bt_dev.le.rl_entries > bt_dev.le.rl_size) {
 		/* Use host-based identity resolving. */
-		bt_conn_set_state(conn, BT_CONN_SCAN_BEFORE_INITIATING);
+		__bt_conn_set_state(conn, BT_CONN_SCAN_BEFORE_INITIATING);
 
 		err = bt_le_scan_user_add(BT_LE_SCAN_USER_CONN);
 		if (err) {
 			bt_le_scan_user_remove(BT_LE_SCAN_USER_CONN);
-			bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
+			__bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
 			bt_conn_unref(conn);
 
 			return err;
@@ -3428,12 +3428,12 @@ int bt_conn_le_create(const bt_addr_le_t *peer, const struct bt_conn_le_create_p
 	}
 #endif
 
-	bt_conn_set_state(conn, BT_CONN_INITIATING);
+	__bt_conn_set_state(conn, BT_CONN_INITIATING);
 
 	err = bt_le_create_conn(conn);
 	if (err) {
 		conn->err = 0;
-		bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
+		__bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
 		bt_conn_unref(conn);
 
 		/* Best-effort attempt to inform the scanner that the initiator stopped. */
@@ -3484,12 +3484,12 @@ int bt_conn_le_create_synced(const struct bt_le_ext_adv *adv,
 	 * used, so disable the timeout.
 	 */
 	bt_dev.create_param.timeout = 0;
-	bt_conn_set_state(conn, BT_CONN_INITIATING);
+	__bt_conn_set_state(conn, BT_CONN_INITIATING);
 
 	err = bt_le_create_conn_synced(conn, adv, synced_param->subevent);
 	if (err) {
 		conn->err = 0;
-		bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
+		__bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
 		bt_conn_unref(conn);
 
 		return err;
@@ -3538,7 +3538,7 @@ int bt_le_set_auto_conn(const bt_addr_le_t *addr,
 					      BT_CONN_AUTO_CONNECT)) {
 			bt_conn_unref(conn);
 			if (conn->state == BT_CONN_SCAN_BEFORE_INITIATING) {
-				bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
+				__bt_conn_set_state(conn, BT_CONN_DISCONNECTED);
 			}
 		}
 	}
@@ -3547,7 +3547,7 @@ int bt_le_set_auto_conn(const bt_addr_le_t *addr,
 	if (conn->state == BT_CONN_DISCONNECTED &&
 	    atomic_test_bit(bt_dev.flags, BT_DEV_READY)) {
 		if (param) {
-			bt_conn_set_state(conn, BT_CONN_SCAN_BEFORE_INITIATING);
+			__bt_conn_set_state(conn, BT_CONN_SCAN_BEFORE_INITIATING);
 			err = bt_le_scan_user_add(BT_LE_SCAN_USER_CONN);
 		}
 	}
@@ -3785,7 +3785,7 @@ int bt_conn_init(void)
 					    BT_CONN_AUTO_CONNECT)) {
 				/* Only the default identity is supported */
 				conn->id = BT_ID_DEFAULT;
-				bt_conn_set_state(conn,
+				__bt_conn_set_state(conn,
 						  BT_CONN_SCAN_BEFORE_INITIATING);
 			}
 #endif /* !defined(CONFIG_BT_FILTER_ACCEPT_LIST) */

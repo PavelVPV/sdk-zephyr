@@ -925,7 +925,7 @@ static void hci_disconn_complete_prio(struct net_buf *buf)
 	uint16_t handle = sys_le16_to_cpu(evt->handle);
 	struct bt_conn *conn;
 
-	LOG_DBG("status 0x%02x handle %u reason 0x%02x", evt->status, handle, evt->reason);
+	LOG_ERR("status 0x%02x handle %u reason 0x%02x", evt->status, handle, evt->reason);
 
 	if (evt->status) {
 		return;

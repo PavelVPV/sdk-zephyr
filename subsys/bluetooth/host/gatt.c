@@ -3295,7 +3295,10 @@ static uint8_t disconnected_cb(const struct bt_gatt_attr *attr, uint16_t handle,
 	bool value_used;
 	size_t i;
 
+//	LOG_WRN("%s:%d", __func__, __LINE__);
+
 	if (!is_host_managed_ccc(attr)) {
+//		LOG_WRN("%s:%d", __func__, __LINE__);
 		return BT_GATT_ITER_CONTINUE;
 	}
 
@@ -3303,6 +3306,7 @@ static uint8_t disconnected_cb(const struct bt_gatt_attr *attr, uint16_t handle,
 
 	/* If already disabled skip */
 	if (!ccc->value) {
+//		LOG_WRN("%s:%d", __func__, __LINE__);
 		return BT_GATT_ITER_CONTINUE;
 	}
 
@@ -3314,6 +3318,7 @@ static uint8_t disconnected_cb(const struct bt_gatt_attr *attr, uint16_t handle,
 
 		/* Ignore configurations with disabled value */
 		if (!cfg->value) {
+//			LOG_WRN("%s:%d", __func__, __LINE__);
 			continue;
 		}
 
@@ -3327,6 +3332,7 @@ static uint8_t disconnected_cb(const struct bt_gatt_attr *attr, uint16_t handle,
 					value_used = true;
 				}
 
+//				LOG_WRN("%s:%d", __func__, __LINE__);
 				bt_conn_unref(tmp);
 			}
 		} else {
@@ -3351,9 +3357,10 @@ static uint8_t disconnected_cb(const struct bt_gatt_attr *attr, uint16_t handle,
 			ccc->cfg_changed(attr, ccc->value);
 		}
 
-		LOG_DBG("ccc %p reseted", ccc);
+		LOG_WRN("ccc %p reseted", ccc);
 	}
 
+//	LOG_WRN("%s:%d", __func__, __LINE__);
 	return BT_GATT_ITER_CONTINUE;
 }
 
@@ -6378,7 +6385,7 @@ int bt_gatt_clear(uint8_t id, const bt_addr_le_t *addr)
 
 void bt_gatt_disconnected(struct bt_conn *conn)
 {
-	LOG_DBG("conn %p", conn);
+	LOG_WRN("conn %p", conn);
 	bt_gatt_foreach_attr(0x0001, 0xffff, disconnected_cb, conn);
 
 #if defined(CONFIG_BT_GATT_NOTIFY_MULTIPLE)
