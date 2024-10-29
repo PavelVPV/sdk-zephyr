@@ -48,9 +48,14 @@ NET_BUF_POOL_FIXED_DEFINE(evt_pool, CONFIG_BT_BUF_EVT_RX_COUNT,
 			  BT_BUF_EVT_RX_SIZE, sizeof(struct bt_buf_data),
 			  NULL);
 #else
+static void hci_rx_pool_destroy(struct net_buf *buf)
+{
+	net_buf_destroy(buf);
+}
+
 NET_BUF_POOL_FIXED_DEFINE(hci_rx_pool, BT_BUF_RX_COUNT,
 			  BT_BUF_RX_SIZE, sizeof(struct acl_data),
-			  NULL);
+			  hci_rx_pool_destroy);
 #endif /* CONFIG_BT_HCI_ACL_FLOW_CONTROL */
 
 struct net_buf *bt_buf_get_rx(enum bt_buf_type type, k_timeout_t timeout)
