@@ -25,6 +25,22 @@ LOG_MODULE_REGISTER(bt_buf, CONFIG_BT_LOG_LEVEL);
  */
 #define SYNC_EVT_SIZE (BT_BUF_RESERVE + BT_HCI_EVT_HDR_SIZE + 255)
 
+static bt_buf_rx_freed_cb_t buf_rx_freed_cb;
+
+static void buf_rx_freed_notify(enum bt_buf_type_bit mask)
+{
+	if (buf_rx_freed_cb) {
+		buf_rx_freed_cb(mask);
+	}
+}
+
+#if defined(CONFIG_BT_ISO)
+static void iso_rx_freed_cb(void)
+{
+	buf_rx_freed_notify(BT_BUF_ISO_IN_BIT);
+}
+#endif
+
 /* Pool for RX HCI buffers that are always freed by `bt_recv`
  * before it returns.
  *
@@ -40,17 +56,35 @@ NET_BUF_POOL_FIXED_DEFINE(discardable_pool, CONFIG_BT_BUF_EVT_DISCARDABLE_COUNT,
 			  sizeof(struct bt_buf_data), NULL);
 
 #if defined(CONFIG_BT_HCI_ACL_FLOW_CONTROL)
+static void acl_in_pool_destroy(struct net_buf *buf)
+{
+	bt_hci_host_num_completed_packets(buf);
+	buf_rx_freed_notify(BT_BUF_ACL_IN_BIT);
+}
+
+static void evt_pool_destroy(struct net_buf *buf)
+{
+	net_buf_destroy(buf);
+	buf_rx_freed_notify(BT_BUF_EVT_BIT);
+}
+
 NET_BUF_POOL_DEFINE(acl_in_pool, CONFIG_BT_BUF_ACL_RX_COUNT,
 		    BT_BUF_ACL_SIZE(CONFIG_BT_BUF_ACL_RX_SIZE),
-		    sizeof(struct acl_data), bt_hci_host_num_completed_packets);
+		    sizeof(struct acl_data), acl_in_pool_destroy);
 
 NET_BUF_POOL_FIXED_DEFINE(evt_pool, CONFIG_BT_BUF_EVT_RX_COUNT,
 			  BT_BUF_EVT_RX_SIZE, sizeof(struct bt_buf_data),
-			  NULL);
+			  evt_pool_destroy);
 #else
 static void hci_rx_pool_destroy(struct net_buf *buf)
 {
 	net_buf_destroy(buf);
+
+	/* When ACL Flow Control is disabled, a single pool is used for events and acl data.
+	 * Therefore the callback will always notify about both types of buffers, BT_BUF_EVT and
+	 * BT_BUF_ACL_IN.
+	 */
+	buf_rx_freed_notify(BT_BUF_EVT_BIT | BT_BUF_ACL_IN_BIT);
 }
 
 NET_BUF_POOL_FIXED_DEFINE(hci_rx_pool, BT_BUF_RX_COUNT,
@@ -85,6 +119,15 @@ struct net_buf *bt_buf_get_rx(enum bt_buf_type type, k_timeout_t timeout)
 	}
 
 	return buf;
+}
+
+void bt_buf_rx_freed_cb_set(bt_buf_rx_freed_cb_t cb)
+{
+	buf_rx_freed_cb = cb;
+
+#if defined(CONFIG_BT_ISO)
+	bt_iso_buf_rx_freed_cb_set(cb != NULL ? iso_rx_freed_cb : NULL);
+#endif
 }
 
 struct net_buf *bt_buf_get_evt(uint8_t evt, bool discardable,
