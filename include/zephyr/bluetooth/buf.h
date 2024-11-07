@@ -110,6 +110,37 @@ struct bt_buf_data {
  */
 struct net_buf *bt_buf_get_rx(enum bt_buf_type type, k_timeout_t timeout);
 
+/** This enum defines types of incoming data buffer based on`enum bt_buf_type` values in a form of
+ * bitfields.
+ */
+enum bt_buf_type_bit {
+	/** HCI event buffer */
+	BT_BUF_EVT_BIT = BIT(BT_BUF_EVT),
+	/** Incomming ACL data buffer */
+	BT_BUF_ACL_IN_BIT = BIT(BT_BUF_ACL_IN),
+	/** Incomming ISO data buffer */
+	BT_BUF_ISO_IN_BIT = BIT(BT_BUF_ISO_IN),
+};
+
+/** A callback to notify about free buffer in the incoming data.
+ *
+ * This callback is called when a buffer of a given type is freed and can be
+ * requested through the @ref bt_buf_get_rx function.
+ *
+ * @warning This callback must only be used for very short non-blocking operation (e.g. submitting
+ * a work item).
+ *
+ * @param type Bitfield of buffer types that have free buffers.
+ */
+typedef void (*bt_buf_rx_ready_cb_t)(enum bt_buf_type_bit type);
+
+/** Set the callback to notify about free buffer for the incoming data.
+ *
+ *  @param cb Callback to notify about free buffer in the incoming data. If NULL, the callback
+ *            is disabled.
+ */
+void bt_buf_rx_ready_cb_set(bt_buf_rx_ready_cb_t cb);
+
 /** Allocate a buffer for outgoing data
  *
  *  This will set the buffer type so bt_buf_set_type() does not need to

@@ -25,6 +25,22 @@ LOG_MODULE_REGISTER(bt_buf, CONFIG_BT_LOG_LEVEL);
  */
 #define SYNC_EVT_SIZE (BT_BUF_RESERVE + BT_HCI_EVT_HDR_SIZE + 255)
 
+static bt_buf_rx_ready_cb_t rx_ready_cb;
+
+static void rx_ready_notify(enum bt_buf_type_bit mask)
+{
+	if (rx_ready_cb) {
+		rx_ready_cb(mask);
+	}
+}
+
+#if defined(CONFIG_BT_ISO)
+static void iso_rx_ready_cb(void)
+{
+	rx_ready_notify(BT_BUF_ISO_IN_BIT);
+}
+#endif
+
 /* Pool for RX HCI buffers that are always freed by `bt_recv`
  * before it returns.
  *
@@ -33,6 +49,7 @@ LOG_MODULE_REGISTER(bt_buf, CONFIG_BT_LOG_LEVEL);
  * the HCI transport to fill buffers in parallel with `bt_recv`
  * consuming them.
  */
+
 NET_BUF_POOL_FIXED_DEFINE(sync_evt_pool, 1, SYNC_EVT_SIZE, sizeof(struct bt_buf_data), NULL);
 
 NET_BUF_POOL_FIXED_DEFINE(discardable_pool, CONFIG_BT_BUF_EVT_DISCARDABLE_COUNT,
@@ -40,17 +57,35 @@ NET_BUF_POOL_FIXED_DEFINE(discardable_pool, CONFIG_BT_BUF_EVT_DISCARDABLE_COUNT,
 			  sizeof(struct bt_buf_data), NULL);
 
 #if defined(CONFIG_BT_HCI_ACL_FLOW_CONTROL)
+static void acl_in_pool_destroy(struct net_buf *buf)
+{
+	bt_hci_host_num_completed_packets(buf);
+	rx_ready_notify(BT_BUF_ACL_IN_BIT);
+}
+
+static void evt_pool_destroy(struct net_buf *buf)
+{
+	net_buf_destroy(buf);
+	rx_ready_notify(BT_BUF_EVT_BIT);
+}
+
 NET_BUF_POOL_DEFINE(acl_in_pool, CONFIG_BT_BUF_ACL_RX_COUNT,
 		    BT_BUF_ACL_SIZE(CONFIG_BT_BUF_ACL_RX_SIZE),
-		    sizeof(struct acl_data), bt_hci_host_num_completed_packets);
+		    sizeof(struct acl_data), acl_in_pool_destroy);
 
 NET_BUF_POOL_FIXED_DEFINE(evt_pool, CONFIG_BT_BUF_EVT_RX_COUNT,
 			  BT_BUF_EVT_RX_SIZE, sizeof(struct bt_buf_data),
-			  NULL);
+			  evt_pool_destroy);
 #else
+static void hci_rx_pool_destroy(struct net_buf *buf)
+{
+	net_buf_destroy(buf);
+	rx_ready_notify(BT_BUF_EVT_BIT | BT_BUF_ACL_IN_BIT);
+}
+
 NET_BUF_POOL_FIXED_DEFINE(hci_rx_pool, BT_BUF_RX_COUNT,
 			  BT_BUF_RX_SIZE, sizeof(struct acl_data),
-			  NULL);
+			  hci_rx_pool_destroy);
 #endif /* CONFIG_BT_HCI_ACL_FLOW_CONTROL */
 
 struct net_buf *bt_buf_get_rx(enum bt_buf_type type, k_timeout_t timeout)
@@ -80,6 +115,15 @@ struct net_buf *bt_buf_get_rx(enum bt_buf_type type, k_timeout_t timeout)
 	}
 
 	return buf;
+}
+
+void bt_buf_rx_ready_cb_set(bt_buf_rx_ready_cb_t cb)
+{
+	rx_ready_cb = cb;
+
+#if defined(CONFIG_BT_ISO)
+	bt_iso_rx_ready_cb_set(cb != NULL ? iso_rx_ready_cb : NULL);
+#endif
 }
 
 struct net_buf *bt_buf_get_evt(uint8_t evt, bool discardable,
