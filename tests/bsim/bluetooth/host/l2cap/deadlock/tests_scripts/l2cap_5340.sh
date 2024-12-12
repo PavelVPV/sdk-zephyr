@@ -2,20 +2,28 @@
 # Copyright (c) 2022 Nordic Semiconductor
 # SPDX-License-Identifier: Apache-2.0
 
-BOARD="nrf52_bsim"
-source ${ZEPHYR_BASE}/tests/bsim/sh_common.source
-
 # EATT test
 simulation_id="l2cap_deadlock"
 verbosity_level=2
 EXECUTE_TIMEOUT=240
 
-bsim_exe=./bs_${BOARD_TS}_tests_bsim_bluetooth_host_l2cap_deadlock_prj_conf
-
 cd ${BSIM_OUT_PATH}/bin
 
-Execute "${bsim_exe}" -v=${verbosity_level} -s=${simulation_id} -d=0 -testid=tester -rs=43
+# Run DUT on nRF5340
+BOARD="nrf5340bsim/nrf5340/cpuapp"
+source ${ZEPHYR_BASE}/tests/bsim/sh_common.source
+
+bsim_exe=./bs_${BOARD_TS}_tests_bsim_bluetooth_host_l2cap_deadlock_prj_conf
+
 Execute "${bsim_exe}" -v=${verbosity_level} -s=${simulation_id} -d=1 -testid=dut -rs=42
+
+# Run testers on nRF52
+#BOARD="nrf52_bsim"
+#source ${ZEPHYR_BASE}/tests/bsim/sh_common.source
+
+#bsim_exe=./bs_${BOARD_TS}_tests_bsim_bluetooth_host_l2cap_deadlock_prj_conf
+
+Execute "${bsim_exe}" -v=${verbosity_level} -s=${simulation_id} -d=0 -testid=tester -rs=43
 Execute "${bsim_exe}" -v=${verbosity_level} -s=${simulation_id} -d=2 -testid=tester_adv -rs=24
 Execute "${bsim_exe}" -v=${verbosity_level} -s=${simulation_id} -d=3 -testid=tester_adv -rs=17
 Execute "${bsim_exe}" -v=${verbosity_level} -s=${simulation_id} -d=4 -testid=tester_adv -rs=35
