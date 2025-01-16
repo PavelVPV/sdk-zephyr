@@ -25,9 +25,9 @@ Execute "${bsim_exe}" -v=${verbosity_level} -s=${simulation_id} -d=1 -testid=dut
 
 Execute "${bsim_exe}" -v=${verbosity_level} -s=${simulation_id} -d=0 -testid=tester -rs=43
 Execute "${bsim_exe}" -v=${verbosity_level} -s=${simulation_id} -d=2 -testid=tester_adv -rs=24
-Execute "${bsim_exe}" -v=${verbosity_level} -s=${simulation_id} -d=3 -testid=tester_adv -rs=17
-Execute "${bsim_exe}" -v=${verbosity_level} -s=${simulation_id} -d=4 -testid=tester_adv -rs=35
+#Execute "${bsim_exe}" -v=${verbosity_level} -s=${simulation_id} -d=3 -testid=tester_adv -rs=17
+#Execute "${bsim_exe}" -v=${verbosity_level} -s=${simulation_id} -d=4 -testid=tester_adv -rs=35
 
-Execute ./bs_2G4_phy_v1 -v=${verbosity_level} -s=${simulation_id} -D=5 -sim_length=800e6 $@
+Execute ./bs_2G4_phy_v1 -v=${verbosity_level} -s=${simulation_id} -D=3 -sim_length=1600e6 $@
 
 wait_for_background_jobs

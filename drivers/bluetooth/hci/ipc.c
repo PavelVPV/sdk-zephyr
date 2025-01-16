@@ -94,7 +94,7 @@ static struct net_buf *bt_ipc_evt_recv(const uint8_t *data, size_t remaining)
 		buf = bt_buf_get_evt(hdr.evt, discardable, discardable ? K_NO_WAIT : K_SECONDS(10));
 		if (!buf) {
 			if (discardable) {
-				LOG_DBG("Discardable buffer pool full, ignoring event");
+				LOG_WRN("Discardable buffer pool full, ignoring event");
 				return buf;
 			}
 			LOG_WRN("Couldn't allocate a buffer after waiting 10 seconds.");
@@ -126,7 +126,8 @@ static struct net_buf *bt_ipc_acl_recv(const uint8_t *data, size_t remaining)
 		return NULL;
 	}
 
-	buf = bt_buf_get_rx(BT_BUF_ACL_IN, K_NO_WAIT);
+	buf = bt_buf_get_rx(BT_BUF_ACL_IN, K_SECONDS(10));//K_NO_WAIT);
+//	buf = bt_buf_get_rx(BT_BUF_ACL_IN, K_NO_WAIT);
 	if (buf) {
 		memcpy((void *)&hdr, data, sizeof(hdr));
 		data += sizeof(hdr);
@@ -214,21 +215,24 @@ static void bt_ipc_rx(const struct device *dev, const uint8_t *data, size_t len)
 	struct net_buf *buf = NULL;
 	size_t remaining = len;
 
-	LOG_HEXDUMP_DBG(data, len, "ipc data:");
+	//LOG_HEXDUMP_WRN(data, len, "ipc data:");
 
 	pkt_indicator = *data++;
 	remaining -= sizeof(pkt_indicator);
 
 	switch (pkt_indicator) {
 	case BT_HCI_H4_EVT:
+		//LOG_WRN("Received HCI event");
 		buf = bt_ipc_evt_recv(data, remaining);
 		break;
 
 	case BT_HCI_H4_ACL:
+		//LOG_WRN("Received ACL data");
 		buf = bt_ipc_acl_recv(data, remaining);
 		break;
 
 	case BT_HCI_H4_ISO:
+		//LOG_WRN("Received ISO data");
 		buf = bt_ipc_iso_recv(data, remaining);
 		break;
 
@@ -242,6 +246,8 @@ static void bt_ipc_rx(const struct device *dev, const uint8_t *data, size_t len)
 		ipc->recv(dev, buf);
 
 		LOG_HEXDUMP_DBG(buf->data, buf->len, "RX buf payload:");
+	} else {
+		LOG_ERR("Failed to allocate buffer for HCI type %u", pkt_indicator);
 	}
 }
 
@@ -291,6 +297,8 @@ static void hci_ept_bound(void *priv)
 static void hci_ept_recv(const void *data, size_t len, void *priv)
 {
 	const struct device *dev = priv;
+
+	//LOG_WRN("Received %zu bytes", len);
 
 	bt_ipc_rx(dev, data, len);
 }

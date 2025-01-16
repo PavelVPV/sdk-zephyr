@@ -13,8 +13,6 @@ export BOARD="nrf52_bsim"
 
 source ${ZEPHYR_BASE}/tests/bsim/compile.source
 
-cmake_extra_args="-DEXTRA_DTC_OVERLAY_FILE=${ZEPHYR_BASE}/tests/bsim/bluetooth/host/l2cap/deadlock/flash.overlay" app=tests/bsim/bluetooth/host/l2cap/deadlock compile
-#app=tests/bsim/bluetooth/host/l2cap/stress conf_file=prj_nofrag.conf compile
-#app=tests/bsim/bluetooth/host/l2cap/stress conf_file=prj_syswq.conf compile
+cmake_extra_args="-DEXTRA_DTC_OVERLAY_FILE=${ZEPHYR_BASE}/tests/bsim/bluetooth/host/l2cap/deadlock/flash.overlay;${ZEPHYR_BASE}/tests/bsim/bluetooth/host/l2cap/deadlock/sdc.overlay" app=tests/bsim/bluetooth/host/l2cap/deadlock compile
 
 wait_for_background_jobs

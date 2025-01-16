@@ -68,6 +68,7 @@ static void acl_in_pool_destroy(struct net_buf *buf)
 
 static void evt_pool_destroy(struct net_buf *buf)
 {
+	//LOG_ERR("Destroy!");
 	net_buf_destroy(buf);
 	buf_rx_freed_notify(BT_BUF_EVT);
 }
@@ -109,6 +110,7 @@ struct net_buf *bt_buf_get_rx(enum bt_buf_type type, k_timeout_t timeout)
 	if (type == BT_BUF_EVT) {
 		buf = net_buf_alloc(&evt_pool, timeout);
 	} else {
+		//LOG_WRN("Using acl pool [%d]", acl_in_pool.avail_count);
 		buf = net_buf_alloc(&acl_in_pool, timeout);
 	}
 #else
@@ -147,12 +149,15 @@ struct net_buf *bt_buf_get_evt(uint8_t evt, bool discardable,
 #endif /* CONFIG_BT_CONN || CONFIG_BT_ISO */
 	case BT_HCI_EVT_CMD_STATUS:
 	case BT_HCI_EVT_CMD_COMPLETE:
+		//LOG_WRN("Using sync_evt_pool for evt %u", evt);
 		buf = net_buf_alloc(&sync_evt_pool, timeout);
 		break;
 	default:
 		if (discardable) {
+			//LOG_WRN("Using discardable_pool for evt %u, avail: %d", evt, discardable_pool.avail_count);
 			buf = net_buf_alloc(&discardable_pool, timeout);
 		} else {
+			//LOG_WRN("Using evt_pool for evt %u, avail: %d", evt, evt_pool.avail_count);
 			return bt_buf_get_rx(BT_BUF_EVT, timeout);
 		}
 	}

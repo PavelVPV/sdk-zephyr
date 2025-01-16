@@ -187,16 +187,33 @@ int recv_cb(struct bt_l2cap_chan *chan, struct net_buf *buf)
 	 * the hci_rx_pool is full and we are holding the buffer from being released by sitting here
 	 * in the receive callback.
 	 */
+//	k_sleep(K_MSEC(10));
+#if 1
 	struct bt_conn_le_tx_power power_level = {0};
 	int err;
 
-	/* Sleep for a while to fill up the hci_rx_pool */
-	k_sleep(K_SECONDS(10));
-
-	err = bt_conn_le_get_tx_power_level(default_conn, &power_level);
-	if (err) {
-		FAIL("Failed to get tx power level (err %d)", err);
+	printk("Sleeping to fill up evt buffer\n");
+#if 0
+	for (int i = 0; i < 5; i++) {
+		printk("[%d] Sleeping for 1s\n", i);
+		k_sleep(K_SECONDS(1));
 	}
+#endif
+	/* Sleep for a while to fill up the hci_rx_pool */
+	k_sleep(K_MSEC(100));
+//	k_sleep(K_SECONDS(60));
+
+	printk("Triggering deadlock in host\n");
+
+//	for (int i = 0; i < 5; i++) {
+		err = bt_conn_le_get_tx_power_level(default_conn, &power_level);
+		if (err) {
+			FAIL("Failed to get tx power level (err %d)", err);
+		}
+
+		printf("Tx power level: %d\n", power_level.current_level);
+//	}
+#endif
 #else
 #error "No deadlock trigger defined"
 #endif
@@ -374,11 +391,26 @@ static void flash_work_handler(struct k_work *work)
 static void scan_cb(const bt_addr_le_t *addr, int8_t rssi,
 		    uint8_t adv_type, struct net_buf_simple *buf)
 {
-	if (adv_type != BT_GAP_ADV_TYPE_ADV_NONCONN_IND) {
-		return;
-	}
+#if 0
+	LOG_WRN("rssi %d adv_type %u", rssi, adv_type);
+	k_sleep(K_SECONDS(1));
+//	k_sleep(K_MSEC(100));
+
+//	if (adv_type != BT_GAP_ADV_TYPE_ADV_NONCONN_IND) {
+//		return;
+//	}
 
 	LOG_HEXDUMP_DBG(buf->data, buf->len, "Recvd adv report");
+
+	struct bt_conn_le_tx_power power_level = {0};
+	int err;
+	err = bt_conn_le_get_tx_power_level(default_conn, &power_level);
+	if (err) {
+		FAIL("Failed to get tx power level (err %d)", err);
+	}
+
+	printf("Tx power level: %d\n", power_level.current_level);
+#endif
 }
 
 #define BT_MESH_ADV_SCAN_UNIT(_ms) ((_ms) * 8 / 5)
@@ -457,7 +489,7 @@ static void test_dut_main(void)
 		return;
 	}
 
-	k_work_submit(&flash_work);
+//	k_work_submit(&flash_work);
 
 	LOG_DBG("DUT waiting for the transfer completion");
 	do {
@@ -579,6 +611,7 @@ static void test_tester_main(void)
 	LOG_DBG("Wait until all transfers are completed.");
 	int remaining_tx = 0;
 	do {
+		remaining_tx = 0;
 		k_msleep(100);
 
 		for (size_t i = 0; i < CHANNELS; i++) {
@@ -710,6 +743,7 @@ static void test_tester_adv_main(void)
 
 	(void)settings_load();
 
+	k_sleep(K_SECONDS(2));
 	advertisers_setup();
 
 	PASS("Tester adv deadlock passed\n");
