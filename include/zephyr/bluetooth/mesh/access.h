@@ -877,6 +877,14 @@ struct bt_mesh_model_cb {
 	 *  @param model Model this callback belongs to.
 	 */
 	void (*const pending_store)(const struct bt_mesh_model *model);
+#ifdef CONFIG_BT_MESH_MODEL_EXTENSIONS
+	const struct bt_mesh_model * (*const extends)(const struct bt_mesh_model *model,
+						      const struct bt_mesh_model *ext_model);
+//#ifdef CONFIG_BT_MESH_COMP_PAGE_1
+	const struct bt_mesh_model * (*const corresponds)(const struct bt_mesh_model *model,
+							  const struct bt_mesh_model *cor_model);
+//#endif
+#endif
 };
 
 /** Vendor model ID */

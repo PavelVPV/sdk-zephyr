@@ -106,6 +106,11 @@ static struct mod_relation mod_rel_list[MOD_REL_LIST_SIZE];
 
 #define RELATION_TYPE_EXT 0xFF
 
+static int mod_rel_register(const struct bt_mesh_model *base,
+				 const struct bt_mesh_model *ext,
+				 uint8_t type);
+static uint8_t get_sig_offset(const struct bt_mesh_model *mod);
+
 static const struct {
 	uint8_t *path;
 	uint8_t page;
@@ -599,12 +604,56 @@ static size_t page1_elem_size(const struct bt_mesh_elem *elem)
 	return temp_size;
 }
 
+static void mod_relations_create(const struct bt_mesh_model *mod, const struct bt_mesh_elem *elem,
+				 bool vnd, bool primary, void *user_data)
+{
+	int *err = user_data;
+	const struct bt_mesh_model *base_mod = mod;
+	const struct bt_mesh_model *extending_mod = NULL;
+	const struct bt_mesh_model *corresponding_mod = NULL;
+
+	while ((extending_mod = base_mod->cb->extends(base_mod, extending_mod)) != NULL) {
+		*err |= mod_rel_register(base_mod, extending_mod, RELATION_TYPE_EXT);
+	}
+
+	int i;
+	uint8_t cor_id = 0;
+
+	while ((corresponding_mod = base_mod->cb->corresponds(base_mod,
+							      corresponding_mod)) != NULL) {
+		uint8_t base_offset = get_sig_offset(base_mod);
+		uint8_t corresponding_offset = get_sig_offset(corresponding_mod);
+
+		MOD_REL_LIST_FOR_EACH(i) {
+			if (mod_rel_list[i].type < RELATION_TYPE_EXT &&
+			    mod_rel_list[i].type > cor_id) {
+				cor_id = mod_rel_list[i].type;
+			}
+
+			if ((IS_MOD_BASE(base_mod, i, base_offset) ||
+			     IS_MOD_EXTENSION(base_mod, i, base_offset) ||
+			     IS_MOD_BASE(corresponding_mod, i, corresponding_offset) ||
+			     IS_MOD_EXTENSION(corresponding_mod, i, corresponding_offset)) &&
+			    mod_rel_list[i].type < RELATION_TYPE_EXT) {
+				*err |= mod_rel_register(base_mod, corresponding_mod,
+							 mod_rel_list[i].type);
+			}
+		}
+
+		*err |= mod_rel_register(base_mod, corresponding_mod, cor_id);
+	}
+}
+
 static int bt_mesh_comp_data_get_page_1(struct net_buf_simple *buf, size_t offset)
 {
 	const struct bt_mesh_comp *comp;
 	uint8_t cor_id = 0;
 	uint8_t ext_mod_cnt = 0;
 	int i, j;
+	int err;
+//	struct mod_relation mod_rel_list[100];
+
+	bt_mesh_model_foreach(mod_relations_create, &err);
 
 	comp = bt_mesh_comp_get();
 
@@ -1708,14 +1757,15 @@ void bt_mesh_model_extensions_walk(const struct bt_mesh_model *model,
 	(void)cb(model, user_data);
 	return;
 #else
-	const struct bt_mesh_model *it;
+	const struct bt_mesh_model *it = NULL;
 
-	if (cb(model, user_data) == BT_MESH_WALK_STOP || !model->rt->next) {
+	if (cb(model, user_data) == BT_MESH_WALK_STOP || !model->cb->extends ||
+	    !model->cb->extends(model, it)) {
 		return;
 	}
 
 	/* List is circular. Step through all models until we reach the start: */
-	for (it = model->rt->next; it != model; it = it->rt->next) {
+	for (it = model->cb->extends(model, it); it != NULL; it = model->cb->extends(model, it)) {
 		if (cb(it, user_data) == BT_MESH_WALK_STOP) {
 			return;
 		}
@@ -1772,14 +1822,17 @@ static int mod_rel_register(const struct bt_mesh_model *base,
 int bt_mesh_model_extend(const struct bt_mesh_model *extending_mod,
 			 const struct bt_mesh_model *base_mod)
 {
+#if 0
 	const struct bt_mesh_model *a = extending_mod;
 	const struct bt_mesh_model *b = base_mod;
 	const struct bt_mesh_model *a_next = a->rt->next;
 	const struct bt_mesh_model *b_next = b->rt->next;
 	const struct bt_mesh_model *it;
+#endif
 
 	base_mod->rt->flags |= BT_MESH_MOD_EXTENDED;
 
+#if 0
 	if (a == b) {
 		return 0;
 	}
@@ -1811,13 +1864,14 @@ register_extension:
 		LOG_ERR("CONFIG_BT_MESH_MODEL_EXTENSION_LIST_SIZE is too small");
 		return -ENOMEM;
 	}
-
+#endif
 	return 0;
 }
 
 int bt_mesh_model_correspond(const struct bt_mesh_model *corresponding_mod,
 			     const struct bt_mesh_model *base_mod)
 {
+#if 0
 	int i, err;
 	uint8_t cor_id = 0;
 
@@ -1846,6 +1900,7 @@ int bt_mesh_model_correspond(const struct bt_mesh_model *corresponding_mod,
 	if (err) {
 		return err;
 	}
+#endif
 	return 0;
 }
 #endif /* CONFIG_BT_MESH_MODEL_EXTENSIONS */
