@@ -10,6 +10,8 @@ set -ue
 
 source ${ZEPHYR_BASE}/tests/bsim/compile.source
 
+export dtc_overlay_file=bt-ll-sw-split.overlay
+
 app=tests/bsim/bluetooth/mesh compile
 app=tests/bsim/bluetooth/mesh conf_overlay=overlay_pst.conf compile
 app=tests/bsim/bluetooth/mesh conf_overlay=overlay_gatt.conf compile

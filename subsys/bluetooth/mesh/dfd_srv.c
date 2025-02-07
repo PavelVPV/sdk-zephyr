@@ -945,13 +945,19 @@ static int dfd_srv_init(const struct bt_mesh_model *mod)
 		return -EINVAL;
 	}
 
-	err = bt_mesh_model_extend(mod, srv->upload.blob.mod);
+	return 0;
+}
 
-	if (err) {
-		return err;
+static const struct bt_mesh_model * dfd_srv_extends(const struct bt_mesh_model *model,
+						    const struct bt_mesh_model *ext_model)
+{
+	struct bt_mesh_dfd_srv *srv = model->rt->user_data;
+
+	if (ext_model == NULL) {
+		return srv->upload.blob.mod;
 	}
 
-	return 0;
+	return NULL;
 }
 
 static void dfd_srv_reset(const struct bt_mesh_model *mod)
@@ -970,6 +976,7 @@ static void dfd_srv_reset(const struct bt_mesh_model *mod)
 
 const struct bt_mesh_model_cb _bt_mesh_dfd_srv_cb = {
 	.init = dfd_srv_init,
+	.extends = dfd_srv_extends,
 	.reset = dfd_srv_reset,
 };
 

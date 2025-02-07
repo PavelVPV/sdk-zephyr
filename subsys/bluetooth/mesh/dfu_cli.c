@@ -963,7 +963,6 @@ const struct bt_mesh_model_op _bt_mesh_dfu_cli_op[] = {
 
 static int dfu_cli_init(const struct bt_mesh_model *mod)
 {
-	int err;
 	struct bt_mesh_dfu_cli *cli = mod->rt->user_data;
 	cli->mod = mod;
 
@@ -975,15 +974,21 @@ static int dfu_cli_init(const struct bt_mesh_model *mod)
 		return -EINVAL;
 	}
 
-	err = bt_mesh_model_extend(mod, cli->blob.mod);
-
-	if (err) {
-		return err;
-	}
-
 	k_sem_init(&cli->req.sem, 0, 1);
 
 	return 0;
+}
+
+static const struct bt_mesh_model * dfu_cli_extends(const struct bt_mesh_model *model,
+						    const struct bt_mesh_model *ext_model)
+{
+	struct bt_mesh_dfu_cli *cli = model->rt->user_data;
+
+	if (ext_model == NULL) {
+		return cli->blob.mod;
+	}
+
+	return NULL;
 }
 
 static void dfu_cli_reset(const struct bt_mesh_model *mod)
@@ -1000,6 +1005,7 @@ static void dfu_cli_reset(const struct bt_mesh_model *mod)
 
 const struct bt_mesh_model_cb _bt_mesh_dfu_cli_cb = {
 	.init = dfu_cli_init,
+	.extends = dfu_cli_extends,
 	.reset = dfu_cli_reset,
 };
 

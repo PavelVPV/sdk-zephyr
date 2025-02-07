@@ -20,6 +20,7 @@ function _compile(){
   local BOARD_ROOT="${BOARD_ROOT:-${ZEPHYR_BASE}}"
   local conf_file="${conf_file:-prj.conf}"
   local extra_conf_file="${extra_conf_file:-""}"
+  local dtc_overlay_file="${dtc_overlay_file:-""}"
   local conf_overlay="${conf_overlay:-""}"
   local snippet="${snippet:-""}"
 
@@ -62,6 +63,7 @@ function _compile(){
   local cmake_cmd+=( -DOVERLAY_CONFIG="${conf_overlay}" \
             -DEXTRA_CONF_FILE="${extra_conf_file}" \
             -DSNIPPET="${snippet}" \
+            -DDTC_OVERLAY_FILE="${dtc_overlay_file}" \
             ${modules_arg} \
             "${cmake_args[@]}" ${cc_flags:+-DCMAKE_C_FLAGS=${cc_flags}} "${cmake_extra_args[@]}")
   if [ -v sysbuild ]; then

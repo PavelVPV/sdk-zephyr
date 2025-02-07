@@ -195,7 +195,6 @@ const struct bt_mesh_model_op bt_mesh_priv_beacon_srv_op[] = {
 
 static int priv_beacon_srv_init(const struct bt_mesh_model *mod)
 {
-	int err;
 	const struct bt_mesh_model *config_srv =
 		bt_mesh_model_find(bt_mesh_model_elem(mod), BT_MESH_MODEL_ID_CFG_SRV);
 
@@ -207,13 +206,20 @@ static int priv_beacon_srv_init(const struct bt_mesh_model *mod)
 	priv_beacon_srv = mod;
 	mod->keys[0] = BT_MESH_KEY_DEV_LOCAL;
 
-	err = bt_mesh_model_extend(mod, config_srv);
+	return 0;
+}
 
-	if (err) {
-		return err;
+static const struct bt_mesh_model * priv_beacon_srv_extends(const struct bt_mesh_model *model,
+							    const struct bt_mesh_model *ext_model)
+{
+	const struct bt_mesh_model *config_srv =
+		bt_mesh_model_find(bt_mesh_model_elem(model), BT_MESH_MODEL_ID_CFG_SRV);
+
+	if (ext_model == NULL) {
+		return config_srv;
 	}
 
-	return 0;
+	return NULL;
 }
 
 static void priv_beacon_srv_reset(const struct bt_mesh_model *model)
@@ -257,6 +263,7 @@ static void priv_beacon_srv_pending_store(const struct bt_mesh_model *model)
 
 const struct bt_mesh_model_cb bt_mesh_priv_beacon_srv_cb = {
 	.init = priv_beacon_srv_init,
+	.extends = priv_beacon_srv_extends,
 	.reset = priv_beacon_srv_reset,
 #ifdef CONFIG_BT_SETTINGS
 	.settings_set = priv_beacon_srv_settings_set,

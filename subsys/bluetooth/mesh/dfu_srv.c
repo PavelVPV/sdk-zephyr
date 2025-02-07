@@ -440,7 +440,6 @@ const struct bt_mesh_model_op _bt_mesh_dfu_srv_op[] = {
 
 static int dfu_srv_init(const struct bt_mesh_model *mod)
 {
-	int err;
 	struct bt_mesh_dfu_srv *srv = mod->rt->user_data;
 
 	srv->mod = mod;
@@ -460,13 +459,19 @@ static int dfu_srv_init(const struct bt_mesh_model *mod)
 		return -EINVAL;
 	}
 
-	err = bt_mesh_model_extend(mod, srv->blob.mod);
+	return 0;
+}
 
-	if (err) {
-		return err;
+static const struct bt_mesh_model * dfu_srv_extends(const struct bt_mesh_model *model,
+						    const struct bt_mesh_model *ext_model)
+{
+	struct bt_mesh_dfu_srv *srv = model->rt->user_data;
+
+	if (ext_model == NULL) {
+		return srv->blob.mod;
 	}
 
-	return 0;
+	return NULL;
 }
 
 static int dfu_srv_settings_set(const struct bt_mesh_model *mod, const char *name,
@@ -508,6 +513,7 @@ static void dfu_srv_reset(const struct bt_mesh_model *mod)
 
 const struct bt_mesh_model_cb _bt_mesh_dfu_srv_cb = {
 	.init = dfu_srv_init,
+	.extends = dfu_srv_extends,
 	.settings_set = dfu_srv_settings_set,
 	.reset = dfu_srv_reset,
 };

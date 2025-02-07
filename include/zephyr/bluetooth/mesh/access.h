@@ -877,6 +877,10 @@ struct bt_mesh_model_cb {
 	 *  @param model Model this callback belongs to.
 	 */
 	void (*const pending_store)(const struct bt_mesh_model *model);
+#ifdef CONFIG_BT_MESH_MODEL_EXTENSIONS
+	const struct bt_mesh_model * (*const extends)(const struct bt_mesh_model *model,
+						      const struct bt_mesh_model *ext_model);
+#endif
 };
 
 /** Vendor model ID */
@@ -905,6 +909,10 @@ struct bt_mesh_model {
 #ifdef CONFIG_BT_MESH_MODEL_EXTENSIONS
 		/* Pointer to the next model in a model extension list. */
 		const struct bt_mesh_model *next;
+		/* Corresponding Group ID. */
+#ifdef CONFIG_BT_MESH_COMP_PAGE_1
+		uint16_t cor_group_id;
+#endif
 #endif
 		/** Model-specific user data */
 		void *user_data;
@@ -1099,8 +1107,10 @@ void bt_mesh_model_data_store_schedule(const struct bt_mesh_model *mod);
  *
  *  @retval 0 Successfully extended the base_mod model.
  */
+#if 0
 int bt_mesh_model_extend(const struct bt_mesh_model *extending_mod,
 			 const struct bt_mesh_model *base_mod);
+#endif
 
 /** @brief Let a model correspond to another.
  *
