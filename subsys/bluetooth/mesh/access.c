@@ -62,49 +62,9 @@ static const struct bt_mesh_comp2 *dev_comp2;
 static uint16_t dev_primary_addr;
 static void (*msg_cb)(uint32_t opcode, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf);
 
-/* Structure containing information about model extension */
-struct mod_relation {
-	/** Element that composition data base model belongs to. */
-	uint8_t elem_base;
-	/** Index of composition data base model in its element. */
-	uint8_t idx_base;
-	/** Element that composition data extension model belongs to. */
-	uint8_t elem_ext;
-	/** Index of composition data extension model in its element. */
-	uint8_t idx_ext;
-	/** Type of relation; value in range 0x00-0xFE marks correspondence
-	 * and equals to Correspondence ID; value 0xFF marks extension
-	 */
-	uint8_t type;
-};
-
-#ifdef CONFIG_BT_MESH_MODEL_EXTENSION_LIST_SIZE
-#define MOD_REL_LIST_SIZE CONFIG_BT_MESH_MODEL_EXTENSION_LIST_SIZE
-#else
-#define MOD_REL_LIST_SIZE 0
+#if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS) && defined(CONFIG_BT_MESH_COMP_PAGE_1)
+static uint8_t cor_group_id;
 #endif
-
-/* List of all existing extension relations between models */
-static struct mod_relation mod_rel_list[MOD_REL_LIST_SIZE];
-
-#define MOD_REL_LIST_FOR_EACH(idx) \
-	for ((idx) = 0; \
-		(idx) < ARRAY_SIZE(mod_rel_list) && \
-		!(mod_rel_list[(idx)].elem_base == 0 && \
-		  mod_rel_list[(idx)].idx_base == 0 && \
-		  mod_rel_list[(idx)].elem_ext == 0 && \
-		  mod_rel_list[(idx)].idx_ext == 0); \
-		 (idx)++)
-
-#define IS_MOD_BASE(mod, idx, offset) \
-	(mod_rel_list[(idx)].elem_base == mod->rt->elem_idx && \
-	 mod_rel_list[(idx)].idx_base == mod->rt->mod_idx + (offset))
-
-#define IS_MOD_EXTENSION(mod, idx, offset) \
-	 (mod_rel_list[(idx)].elem_ext == mod->rt->elem_idx && \
-	  mod_rel_list[(idx)].idx_ext == mod->rt->mod_idx + (offset))
-
-#define RELATION_TYPE_EXT 0xFF
 
 static const struct {
 	uint8_t *path;
@@ -457,144 +417,132 @@ int bt_mesh_comp_data_get_page_0(struct net_buf_simple *buf, size_t offset)
 	return 0;
 }
 
-static uint8_t count_mod_ext(const struct bt_mesh_model *mod,
-			     uint8_t *max_offset, uint8_t sig_offset)
+static uint32_t extended_models_count(const struct bt_mesh_model *base_mod, bool *format)
 {
-	int i;
-	uint8_t extensions = 0;
-	int8_t offset, offset_record = 0;
+	uint32_t ext_mod_cnt = 0;
 
-	MOD_REL_LIST_FOR_EACH(i) {
-		if (IS_MOD_EXTENSION(mod, i, sig_offset) &&
-		    mod_rel_list[i].type == RELATION_TYPE_EXT) {
-			extensions++;
-			offset = mod_rel_list[i].elem_ext -
-				mod_rel_list[i].elem_base;
-			if (abs(offset) > abs(offset_record)) {
-				offset_record = offset;
-			}
-		}
-	}
+#if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS)
+	const struct bt_mesh_model *extending_mod = NULL;
 
-	if (max_offset) {
-		memcpy(max_offset, &offset_record, sizeof(uint8_t));
-	}
-	return extensions;
-}
-
-static bool is_cor_present(const struct bt_mesh_model *mod, uint8_t *cor_id, uint8_t sig_offset)
-{
-	int i;
-
-	MOD_REL_LIST_FOR_EACH(i)
-	{
-		if ((IS_MOD_BASE(mod, i, sig_offset) ||
-		     IS_MOD_EXTENSION(mod, i, sig_offset)) &&
-		    mod_rel_list[i].type < RELATION_TYPE_EXT) {
-			if (cor_id) {
-				memcpy(cor_id, &mod_rel_list[i].type, sizeof(uint8_t));
-			}
-			return true;
-		}
-	}
-	return false;
-}
-
-static void prep_model_item_header(const struct bt_mesh_model *mod, uint8_t *cor_id,
-				   uint8_t *mod_cnt, struct net_buf_simple *buf,
-				   size_t *offset, uint8_t sig_offset)
-{
-	uint8_t ext_mod_cnt;
-	bool cor_present;
-	uint8_t mod_elem_info = 0;
-	int8_t max_offset;
-
-	ext_mod_cnt = count_mod_ext(mod, &max_offset, sig_offset);
-	cor_present = is_cor_present(mod, cor_id, sig_offset);
-
-	mod_elem_info = ext_mod_cnt << 2;
-	if (ext_mod_cnt > 31 ||
-		max_offset > 3 ||
-		max_offset < -4) {
-		mod_elem_info |= BIT(1);
-	}
-	if (cor_present) {
-		mod_elem_info |= BIT(0);
-	}
-	data_buf_add_u8_offset(buf, mod_elem_info, offset);
-
-	if (cor_present) {
-		data_buf_add_u8_offset(buf, *cor_id, offset);
-	}
-	memset(mod_cnt, ext_mod_cnt, sizeof(uint8_t));
-}
-
-static void add_items_to_page(struct net_buf_simple *buf, const struct bt_mesh_model *mod,
-			      uint8_t ext_mod_cnt, size_t *offset, uint8_t sig_offset)
-{
-	int i, elem_offset;
-	uint8_t mod_idx;
-
-	MOD_REL_LIST_FOR_EACH(i) {
-		if (IS_MOD_EXTENSION(mod, i, sig_offset) &&
-		    mod_rel_list[i].type == RELATION_TYPE_EXT) {
-			elem_offset = mod->rt->elem_idx - mod_rel_list[i].elem_base;
-			mod_idx = mod_rel_list[i].idx_base;
-			if (ext_mod_cnt < 32 &&
-				elem_offset < 4 &&
-				elem_offset > -5) {
-				/* short format */
-				if (elem_offset < 0) {
-					elem_offset += 8;
-				}
-
-				elem_offset |= mod_idx << 3;
-				data_buf_add_u8_offset(buf, elem_offset, offset);
-			} else {
-				/* long format */
-				if (elem_offset < 0) {
-					elem_offset += 256;
-				}
-				data_buf_add_u8_offset(buf, elem_offset, offset);
-				data_buf_add_u8_offset(buf, mod_idx, offset);
-			}
-		}
-	}
-}
-
-static size_t mod_items_size(const struct bt_mesh_model *mod, uint8_t sig_offset)
-{
-	int i, offset;
-	size_t temp_size = 0;
-	int ext_mod_cnt = count_mod_ext(mod, NULL, sig_offset);
-
-	if (!ext_mod_cnt) {
+	if (base_mod->cb == NULL || base_mod->cb->extends == NULL) {
 		return 0;
 	}
 
-	MOD_REL_LIST_FOR_EACH(i) {
-		if (IS_MOD_EXTENSION(mod, i, sig_offset)) {
-			offset = mod->rt->elem_idx - mod_rel_list[i].elem_base;
-			temp_size += (ext_mod_cnt < 32 && offset < 4 && offset > -5) ? 1 : 2;
+//	LOG_WRN("%s: mod[%d:%d], cb: %p", __func__, base_mod->rt->elem_idx, base_mod->rt->mod_idx,
+//		base_mod->cb->extends);
+
+	while ((extending_mod = base_mod->cb->extends(base_mod, extending_mod)) != NULL) {
+		int32_t elem_offset = base_mod->rt->elem_idx - extending_mod->rt->elem_idx;
+
+		if (elem_offset > 3 || elem_offset < -4 ||
+		    extending_mod->rt->mod_idx > 31) {
+			*format = true;
 		}
+
+		ext_mod_cnt++;
+	}
+#endif
+
+	return ext_mod_cnt;
+}
+
+static void prep_model_item_header(struct net_buf_simple *buf, const struct bt_mesh_model *mod,
+				   bool format, uint32_t ext_mod_cnt, size_t *offset)
+{
+#if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS) && defined(CONFIG_BT_MESH_COMP_PAGE_1)
+	bool cor_present = mod->rt->cor_group_id != 0;
+	uint8_t mod_elem_info = 0;
+
+	if (format) {
+		mod_elem_info |= BIT(1);
 	}
 
-	return temp_size;
+	if (cor_present) {
+		mod_elem_info |= BIT(0);
+	}
+
+	mod_elem_info |= (ext_mod_cnt & 0xFF) << 2;
+	data_buf_add_u8_offset(buf, mod_elem_info, offset);
+
+//	LOG_WRN("mod[%d:%d]: cp: %d, cid: %d, ext_mod_cnt: %d", mod->rt->elem_idx, mod->rt->mod_idx,
+//		cor_present, mod->rt->cor_group_id, ext_mod_cnt);
+
+	if (cor_present) {
+		data_buf_add_u8_offset(buf, mod->rt->cor_group_id - 1, offset);
+	}
+#endif
+}
+
+static void add_items_to_page(struct net_buf_simple *buf, const struct bt_mesh_model *mod,
+			      bool format, size_t *offset)
+{
+#if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS)
+	const struct bt_mesh_model *extending_mod = NULL;
+
+	if (mod->cb->extends == NULL) {
+		return;
+	}
+
+	while ((extending_mod = mod->cb->extends(mod, extending_mod)) != NULL) {
+		int32_t elem_offset = mod->rt->elem_idx - extending_mod->rt->elem_idx;
+
+//		LOG_WRN("%s: elem_offset: %d, mod_idx: %d", __func__, elem_offset,
+//			extending_mod->rt->mod_idx);
+
+		if (!format) {
+			if (elem_offset < 0) {
+				elem_offset += 8;
+			}
+
+			data_buf_add_u8_offset(buf, (uint8_t) elem_offset |
+					       (extending_mod->rt->mod_idx << 3),
+					       offset);
+		} else {
+			if (elem_offset < 0) {
+				elem_offset += 256;
+			}
+
+			data_buf_add_u8_offset(buf, (uint8_t) elem_offset, offset);
+			data_buf_add_u8_offset(buf, extending_mod->rt->mod_idx,
+					       offset);
+		}
+	}
+#endif
 }
 
 static size_t page1_elem_size(const struct bt_mesh_elem *elem)
 {
 	size_t temp_size = 2;
 
-	for (int i = 0; i < elem->model_count; i++) {
-		temp_size += is_cor_present(&elem->models[i], NULL, 0) ? 2 : 1;
-		temp_size += mod_items_size(&elem->models[i], 0);
-	}
+#if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS) && defined(CONFIG_BT_MESH_COMP_PAGE_1)
+	struct {
+		uint32_t count;
+		const struct bt_mesh_model *models;
+	} model_types[] = {
+		{
+			.count = elem->model_count,
+			.models = elem->models,
+		},
+		{
+			.count = elem->vnd_model_count,
+			.models = elem->vnd_models,
+		}
+	};
 
-	for (int i = 0; i < elem->vnd_model_count; i++) {
-		temp_size += is_cor_present(&elem->vnd_models[i], NULL, elem->model_count) ? 2 : 1;
-		temp_size += mod_items_size(&elem->vnd_models[i], elem->model_count);
+	for (int j = 0; j < ARRAY_SIZE(model_types); j++) {
+		for (int k = 0; k < model_types[j].count; k++) {
+			const struct bt_mesh_model *mod = &model_types[j].models[k];
+			bool cor_present = mod->rt->cor_group_id != 0;
+			uint8_t ext_mod_cnt = 0;
+			bool fmt_long = false;
+
+			ext_mod_cnt = extended_models_count(mod, &fmt_long);
+
+			temp_size += cor_present ? 2 : 1;
+			temp_size += fmt_long ? ext_mod_cnt * 2 : ext_mod_cnt;
+		}
 	}
+#endif
 
 	return temp_size;
 }
@@ -602,14 +550,14 @@ static size_t page1_elem_size(const struct bt_mesh_elem *elem)
 static int bt_mesh_comp_data_get_page_1(struct net_buf_simple *buf, size_t offset)
 {
 	const struct bt_mesh_comp *comp;
-	uint8_t cor_id = 0;
-	uint8_t ext_mod_cnt = 0;
-	int i, j;
+
+	// TODO: I need to calculate max CDP size and alloc
 
 	comp = bt_mesh_comp_get();
 
-	for (i = 0; i < comp->elem_count; i++) {
-		size_t elem_size = page1_elem_size(&comp->elem[i]);
+	for (int i = 0; i < comp->elem_count; i++) {
+		const struct bt_mesh_elem *elem = &comp->elem[i];
+		size_t elem_size = page1_elem_size(elem);
 
 		if (offset >= elem_size) {
 			offset -= elem_size;
@@ -623,7 +571,7 @@ static int bt_mesh_comp_data_get_page_1(struct net_buf_simple *buf, size_t offse
 				 * the element shall not be reported.
 				 */
 				LOG_DBG("Element 0x%04x didn't fit in the Data field",
-					comp->elem[i].rt->addr);
+					elem->rt->addr);
 				return 0;
 			}
 
@@ -631,29 +579,40 @@ static int bt_mesh_comp_data_get_page_1(struct net_buf_simple *buf, size_t offse
 			return -E2BIG;
 		}
 
-		data_buf_add_u8_offset(buf, comp->elem[i].model_count, &offset);
-		data_buf_add_u8_offset(buf, comp->elem[i].vnd_model_count, &offset);
-		for (j = 0; j < comp->elem[i].model_count; j++) {
-			prep_model_item_header(&comp->elem[i].models[j], &cor_id, &ext_mod_cnt, buf,
-					       &offset, 0);
-			if (ext_mod_cnt != 0) {
-				add_items_to_page(buf, &comp->elem[i].models[j], ext_mod_cnt,
-						  &offset,
-						  0);
-			}
-		}
+		data_buf_add_u8_offset(buf, elem->model_count, &offset);
+		data_buf_add_u8_offset(buf, elem->vnd_model_count, &offset);
 
-		for (j = 0; j < comp->elem[i].vnd_model_count; j++) {
-			prep_model_item_header(&comp->elem[i].vnd_models[j], &cor_id, &ext_mod_cnt,
-					       buf, &offset,
-						   comp->elem[i].model_count);
-			if (ext_mod_cnt != 0) {
-				add_items_to_page(buf, &comp->elem[i].vnd_models[j], ext_mod_cnt,
-						  &offset,
-						  comp->elem[i].model_count);
+		struct {
+			uint32_t count;
+			const struct bt_mesh_model *models;
+		} model_types[] = {
+			{
+				.count = elem->model_count,
+				.models = elem->models,
+			},
+			{
+				.count = elem->vnd_model_count,
+				.models = elem->vnd_models,
+			}
+		};
+
+		for (int j = 0; j < ARRAY_SIZE(model_types); j++) {
+			for (int k = 0; k < model_types[j].count; k++) {
+				const struct bt_mesh_model *base_mod = &model_types[j].models[k];
+				uint8_t ext_mod_cnt = 0;
+				bool fmt_long = false;
+
+				ext_mod_cnt = extended_models_count(base_mod, &fmt_long);
+
+				prep_model_item_header(buf, base_mod, fmt_long, ext_mod_cnt, &offset);
+
+				if (ext_mod_cnt != 0) {
+					add_items_to_page(buf, base_mod, fmt_long, &offset);
+				}
 			}
 		}
 	}
+
 	return 0;
 }
 
@@ -1014,6 +973,44 @@ static int bt_mesh_vnd_mod_msg_cid_check(const struct bt_mesh_model *mod)
 }
 #endif
 
+#if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS)
+static void extention_tree_update(const struct bt_mesh_model *extending_mod,
+				  const struct bt_mesh_model *base_mod)
+{
+	const struct bt_mesh_model *a = extending_mod;
+	const struct bt_mesh_model *b = base_mod;
+	const struct bt_mesh_model *a_next = a->rt->next;
+	const struct bt_mesh_model *b_next = b->rt->next;
+	const struct bt_mesh_model *it;
+
+	base_mod->rt->flags |= BT_MESH_MOD_EXTENDED;
+
+	if (a == b) {
+		return;
+	}
+
+	/* Check if a's list contains b */
+	for (it = a; (it != NULL) && (it->rt->next != a); it = it->rt->next) {
+		if (it == b) {
+			return;
+		}
+	}
+
+	/* Merge lists */
+	if (a_next) {
+		b->rt->next = a_next;
+	} else {
+		b->rt->next = a;
+	}
+
+	if (b_next) {
+		a->rt->next = b_next;
+	} else {
+		a->rt->next = b;
+	}
+}
+#endif
+
 static void mod_init(const struct bt_mesh_model *mod, const struct bt_mesh_elem *elem,
 		     bool vnd, bool primary, void *user_data)
 {
@@ -1053,6 +1050,22 @@ static void mod_init(const struct bt_mesh_model *mod, const struct bt_mesh_elem 
 	}
 }
 
+static void mod_ext(const struct bt_mesh_model *mod, const struct bt_mesh_elem *elem,
+		    bool vnd, bool primary, void *user_data)
+{
+#if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS)
+	const struct bt_mesh_model *extending_mod = NULL;
+
+	if (mod->cb == NULL || mod->cb->extends == NULL) {
+		return;
+	}
+
+	while ((extending_mod = mod->cb->extends(mod, extending_mod)) != NULL) {
+		extention_tree_update(extending_mod, mod);
+	}
+#endif
+}
+
 int bt_mesh_comp_register(const struct bt_mesh_comp *comp)
 {
 	int err;
@@ -1066,30 +1079,10 @@ int bt_mesh_comp_register(const struct bt_mesh_comp *comp)
 
 	err = 0;
 
-	if (MOD_REL_LIST_SIZE > 0) {
-		memset(mod_rel_list, 0, sizeof(mod_rel_list));
-	}
-
 	bt_mesh_model_foreach(mod_init, &err);
 
-	if (MOD_REL_LIST_SIZE > 0) {
-		int i;
-
-		MOD_REL_LIST_FOR_EACH(i) {
-			LOG_DBG("registered %s",
-				mod_rel_list[i].type < RELATION_TYPE_EXT ?
-				"correspondence" : "extension");
-			LOG_DBG("\tbase: elem %u idx %u",
-				mod_rel_list[i].elem_base,
-				mod_rel_list[i].idx_base);
-			LOG_DBG("\text: elem %u idx %u",
-				mod_rel_list[i].elem_ext,
-				mod_rel_list[i].idx_ext);
-		}
-		if (i < MOD_REL_LIST_SIZE) {
-			LOG_WRN("Unused space in relation list: %d",
-				MOD_REL_LIST_SIZE - i);
-		}
+	if (IS_ENABLED(CONFIG_BT_MESH_MODEL_EXTENSIONS)) {
+		bt_mesh_model_foreach(mod_ext, &err);
 	}
 
 	return err;
@@ -1724,128 +1717,39 @@ void bt_mesh_model_extensions_walk(const struct bt_mesh_model *model,
 }
 
 #ifdef CONFIG_BT_MESH_MODEL_EXTENSIONS
-/* For vendor models, determine the offset within the model relation list
- * by counting the number of standard SIG models in the associated element.
- */
-static uint8_t get_sig_offset(const struct bt_mesh_model *mod)
-{
-	const struct bt_mesh_elem *elem = bt_mesh_model_elem(mod);
-	uint8_t i;
-
-	for (i = 0U; i < elem->vnd_model_count; i++) {
-		if (&elem->vnd_models[i] == mod) {
-			return elem->model_count;
-		}
-	}
-	return 0;
-}
-
-static int mod_rel_register(const struct bt_mesh_model *base,
-				 const struct bt_mesh_model *ext,
-				 uint8_t type)
-{
-	LOG_DBG("");
-	struct mod_relation extension = {
-		base->rt->elem_idx,
-		base->rt->mod_idx + get_sig_offset(base),
-		ext->rt->elem_idx,
-		ext->rt->mod_idx + get_sig_offset(ext),
-		type,
-	};
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(mod_rel_list); i++) {
-		if (mod_rel_list[i].elem_base == 0 &&
-			mod_rel_list[i].idx_base == 0 &&
-			mod_rel_list[i].elem_ext == 0 &&
-			mod_rel_list[i].idx_ext == 0) {
-			memcpy(&mod_rel_list[i], &extension,
-			       sizeof(extension));
-			return 0;
-		}
-	}
-
-	LOG_ERR("CONFIG_BT_MESH_MODEL_EXTENSION_LIST_SIZE is too small");
-	return -ENOMEM;
-}
-
-int bt_mesh_model_extend(const struct bt_mesh_model *extending_mod,
-			 const struct bt_mesh_model *base_mod)
-{
-	const struct bt_mesh_model *a = extending_mod;
-	const struct bt_mesh_model *b = base_mod;
-	const struct bt_mesh_model *a_next = a->rt->next;
-	const struct bt_mesh_model *b_next = b->rt->next;
-	const struct bt_mesh_model *it;
-
-	base_mod->rt->flags |= BT_MESH_MOD_EXTENDED;
-
-	if (a == b) {
-		return 0;
-	}
-
-	/* Check if a's list contains b */
-	for (it = a; (it != NULL) && (it->rt->next != a); it = it->rt->next) {
-		if (it == b) {
-			goto register_extension;
-		}
-	}
-
-	/* Merge lists */
-	if (a_next) {
-		b->rt->next = a_next;
-	} else {
-		b->rt->next = a;
-	}
-
-	if (b_next) {
-		a->rt->next = b_next;
-	} else {
-		a->rt->next = b;
-	}
-
-register_extension:
-	if (MOD_REL_LIST_SIZE > 0) {
-		return mod_rel_register(base_mod, extending_mod, RELATION_TYPE_EXT);
-	} else if (IS_ENABLED(CONFIG_BT_MESH_COMP_PAGE_1)) {
-		LOG_ERR("CONFIG_BT_MESH_MODEL_EXTENSION_LIST_SIZE is too small");
-		return -ENOMEM;
-	}
-
-	return 0;
-}
-
 int bt_mesh_model_correspond(const struct bt_mesh_model *corresponding_mod,
 			     const struct bt_mesh_model *base_mod)
 {
-	int i, err;
-	uint8_t cor_id = 0;
+	__ASSERT_NO_MSG(corresponding_mod);
+	__ASSERT_NO_MSG(base_mod);
+	/** Check first if the base model has already an assigned group
+	 * If so, use that group for corresponding model.
+	 * If not, check if the corresponding model has already an assigned
+	 * group.
+	 * If so, use that group for the base model.
+	 * If not, use new group id.
+	 */
+//	LOG_WRN(">>> b[%d:%d]:%d,c[%d:%d]:%d,g:%d",
+//		base_mod->rt->elem_idx, base_mod->rt->mod_idx,
+//		base_mod->rt->cor_group_id,
+//		corresponding_mod->rt->elem_idx, corresponding_mod->rt->mod_idx,
+//		corresponding_mod->rt->cor_group_id, cor_group_id);
 
-	if (MOD_REL_LIST_SIZE == 0) {
-		return -ENOTSUP;
+	if (base_mod->rt->cor_group_id != 0) {
+		corresponding_mod->rt->cor_group_id = base_mod->rt->cor_group_id;
+	} else if (corresponding_mod->rt->cor_group_id != 0) {
+		base_mod->rt->cor_group_id = corresponding_mod->rt->cor_group_id;
+	} else {
+		base_mod->rt->cor_group_id = ++cor_group_id;
+		corresponding_mod->rt->cor_group_id = base_mod->rt->cor_group_id;
 	}
 
-	uint8_t base_offset = get_sig_offset(base_mod);
-	uint8_t corresponding_offset = get_sig_offset(corresponding_mod);
+//	LOG_WRN("<<< b[%d:%d]:%d,c[%d:%d]:%d,g:%d",
+//		base_mod->rt->elem_idx, base_mod->rt->mod_idx,
+//		base_mod->rt->cor_group_id,
+//		corresponding_mod->rt->elem_idx, corresponding_mod->rt->mod_idx,
+//		corresponding_mod->rt->cor_group_id, cor_group_id);
 
-	MOD_REL_LIST_FOR_EACH(i) {
-		if (mod_rel_list[i].type < RELATION_TYPE_EXT &&
-		    mod_rel_list[i].type > cor_id) {
-			cor_id = mod_rel_list[i].type;
-		}
-
-		if ((IS_MOD_BASE(base_mod, i, base_offset) ||
-		     IS_MOD_EXTENSION(base_mod, i, base_offset) ||
-		     IS_MOD_BASE(corresponding_mod, i, corresponding_offset) ||
-		     IS_MOD_EXTENSION(corresponding_mod, i, corresponding_offset)) &&
-		    mod_rel_list[i].type < RELATION_TYPE_EXT) {
-			return mod_rel_register(base_mod, corresponding_mod, mod_rel_list[i].type);
-		}
-	}
-	err = mod_rel_register(base_mod, corresponding_mod, cor_id);
-	if (err) {
-		return err;
-	}
 	return 0;
 }
 #endif /* CONFIG_BT_MESH_MODEL_EXTENSIONS */
@@ -2331,7 +2235,6 @@ size_t comp_page_1_size(void)
 	comp = bt_mesh_comp_get();
 
 	for (int i = 0; i < comp->elem_count; i++) {
-
 		size += page1_elem_size(&comp->elem[i]);
 	}
 

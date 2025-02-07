@@ -40,6 +40,16 @@ static int model2_init(const struct bt_mesh_model *model);
 static int model3_init(const struct bt_mesh_model *model);
 static int model4_init(const struct bt_mesh_model *model);
 static int model5_init(const struct bt_mesh_model *model);
+static const struct bt_mesh_model * model1_extends(const struct bt_mesh_model *model,
+						   const struct bt_mesh_model *ext_model);
+static const struct bt_mesh_model * model2_extends(const struct bt_mesh_model *model,
+						   const struct bt_mesh_model *ext_model);
+static const struct bt_mesh_model * model3_extends(const struct bt_mesh_model *model,
+						   const struct bt_mesh_model *ext_model);
+static const struct bt_mesh_model * model4_extends(const struct bt_mesh_model *model,
+						   const struct bt_mesh_model *ext_model);
+static const struct bt_mesh_model * model5_extends(const struct bt_mesh_model *model,
+						   const struct bt_mesh_model *ext_model);
 static int test_msg_handler(const struct bt_mesh_model *model,
 			struct bt_mesh_msg_ctx *ctx,
 			struct net_buf_simple *buf);
@@ -137,22 +147,27 @@ static struct bt_mesh_model_pub model_pub1 = {
 
 static const struct bt_mesh_model_cb test_model1_cb = {
 	.init = model1_init,
+	.extends = model1_extends,
 };
 
 static const struct bt_mesh_model_cb test_model2_cb = {
 	.init = model2_init,
+	.extends = model2_extends,
 };
 
 static const struct bt_mesh_model_cb test_model3_cb = {
 	.init = model3_init,
+	.extends = model3_extends,
 };
 
 static const struct bt_mesh_model_cb test_model4_cb = {
 	.init = model4_init,
+	.extends = model4_extends,
 };
 
 static const struct bt_mesh_model_cb test_model5_cb = {
 	.init = model5_init,
+	.extends = model5_extends,
 };
 
 static const struct bt_mesh_model_op model_op1[] = {
@@ -256,35 +271,75 @@ static int model1_init(const struct bt_mesh_model *model)
 	return 0;
 }
 
+static const struct bt_mesh_model * model1_extends(const struct bt_mesh_model *model,
+						   const struct bt_mesh_model *ext_model)
+{
+	return NULL;
+}
+
 static int model2_init(const struct bt_mesh_model *model)
 {
 	return 0;
 }
 
+static const struct bt_mesh_model * model2_extends(const struct bt_mesh_model *model,
+						   const struct bt_mesh_model *ext_model)
+{
+	return NULL;
+}
+
 static int model3_init(const struct bt_mesh_model *model)
 {
-	ASSERT_OK(bt_mesh_model_extend(model, model - 2));
-	ASSERT_OK(bt_mesh_model_extend(model, model - 1));
+	return 0;
+}
 
-	if (model->rt->elem_idx == 1) {
-		ASSERT_OK(bt_mesh_model_extend(model, &models[4]));
+static const struct bt_mesh_model * model3_extends(const struct bt_mesh_model *model,
+						   const struct bt_mesh_model *ext_model)
+{
+	if (ext_model == NULL) {
+		return model - 2;
 	}
 
-	return 0;
+	if (ext_model == (model - 2)) {
+		return model - 1;
+	}
+
+	if (ext_model == (model - 1) &&
+	    model->rt->elem_idx == 1) {
+		return &models[4];
+	}
+
+	return NULL;
 }
 
 static int model4_init(const struct bt_mesh_model *model)
 {
-	ASSERT_OK(bt_mesh_model_extend(model, model - 1));
-
 	return 0;
+}
+
+static const struct bt_mesh_model * model4_extends(const struct bt_mesh_model *model,
+						   const struct bt_mesh_model *ext_model)
+{
+	if (ext_model == NULL) {
+		return model - 1;
+	}
+
+	return NULL;
 }
 
 static int model5_init(const struct bt_mesh_model *model)
 {
-	ASSERT_OK(bt_mesh_model_extend(model, model - 4));
-
 	return 0;
+}
+
+static const struct bt_mesh_model * model5_extends(const struct bt_mesh_model *model,
+						   const struct bt_mesh_model *ext_model)
+{
+	if (ext_model == NULL) {
+		return model - 4;
+	}
+
+	return NULL;
 }
 
 static int test_msg_handler(const struct bt_mesh_model *model,

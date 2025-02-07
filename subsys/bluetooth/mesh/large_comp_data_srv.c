@@ -184,11 +184,24 @@ static int large_comp_data_srv_init(const struct bt_mesh_model *model)
 
 	srv.model = model;
 
-	bt_mesh_model_extend(model, config_srv);
-
 	return 0;
+}
+
+static const struct bt_mesh_model * large_comp_data_srv_extends(const struct bt_mesh_model *model,
+								const struct bt_mesh_model *ext_model)
+{
+	const struct bt_mesh_model *config_srv =
+		bt_mesh_model_find(bt_mesh_model_elem(model), BT_MESH_MODEL_ID_CFG_SRV);
+
+	if (ext_model == NULL) {
+		return config_srv;
+	}
+
+	return NULL;
 }
 
 const struct bt_mesh_model_cb _bt_mesh_large_comp_data_srv_cb = {
 	.init = large_comp_data_srv_init,
+	.extends = large_comp_data_srv_extends,
+
 };
