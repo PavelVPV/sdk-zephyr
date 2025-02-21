@@ -420,12 +420,12 @@ static uint32_t extended_models_count(const struct bt_mesh_model *base_mod, bool
 	const struct bt_mesh_model *extending_mod = NULL;
 	uint32_t ext_mod_cnt = 0;
 
-	LOG_WRN("%s: mod[%d:%d], cb: %p", __func__, base_mod->rt->elem_idx, base_mod->rt->mod_idx,
-		base_mod->cb->extends);
-
-	if (base_mod->cb->extends == NULL) {
+	if (base_mod->cb == NULL || base_mod->cb->extends == NULL) {
 		return 0;
 	}
+
+	LOG_WRN("%s: mod[%d:%d], cb: %p", __func__, base_mod->rt->elem_idx, base_mod->rt->mod_idx,
+		base_mod->cb->extends);
 
 	while ((extending_mod = base_mod->cb->extends(base_mod, extending_mod)) != NULL) {
 		int32_t elem_offset = base_mod->rt->elem_idx - extending_mod->rt->elem_idx;
@@ -507,18 +507,33 @@ static size_t page1_elem_size(const struct bt_mesh_elem *elem)
 {
 	size_t temp_size = 2;
 
-	//FIXME: To be implemented
-#if 0
-	for (int i = 0; i < elem->model_count; i++) {
-		temp_size += is_cor_present(&elem->models[i], NULL, 0) ? 2 : 1;
-		temp_size += mod_items_size(&elem->models[i], 0);
-	}
+	struct {
+		uint32_t count;
+		const struct bt_mesh_model *models;
+	} model_types[] = {
+		{
+			.count = elem->model_count,
+			.models = elem->models,
+		},
+		{
+			.count = elem->vnd_model_count,
+			.models = elem->vnd_models,
+		}
+	};
 
-	for (int i = 0; i < elem->vnd_model_count; i++) {
-		temp_size += is_cor_present(&elem->vnd_models[i], NULL, elem->model_count) ? 2 : 1;
-		temp_size += mod_items_size(&elem->vnd_models[i], elem->model_count);
+	for (int j = 0; j < ARRAY_SIZE(model_types); j++) {
+		for (int k = 0; k < model_types[j].count; k++) {
+			const struct bt_mesh_model *mod = &model_types[j].models[k];
+			bool cor_present = mod->rt->cor_group_id != 0;
+			uint8_t ext_mod_cnt = 0;
+			bool fmt_long = false;
+
+			ext_mod_cnt = extended_models_count(mod, &fmt_long);
+
+			temp_size += cor_present ? 2 : 1;
+			temp_size += fmt_long ? ext_mod_cnt * 2 : ext_mod_cnt;
+		}
 	}
-#endif
 
 	return temp_size;
 }
@@ -533,6 +548,27 @@ static int bt_mesh_comp_data_get_page_1(struct net_buf_simple *buf, size_t offse
 
 	for (int i = 0; i < comp->elem_count; i++) {
 		const struct bt_mesh_elem *elem = &comp->elem[i];
+		size_t elem_size = page1_elem_size(elem);
+
+		if (offset >= elem_size) {
+			offset -= elem_size;
+			continue;
+		}
+
+		if (net_buf_simple_tailroom(buf) < ((elem_size - offset) + BT_MESH_MIC_SHORT)) {
+			if (IS_ENABLED(CONFIG_BT_MESH_LARGE_COMP_DATA_SRV)) {
+				/* MshPRTv1.1: 4.4.1.2.2:
+				 * If the complete list of models does not fit in the Data field,
+				 * the element shall not be reported.
+				 */
+				LOG_DBG("Element 0x%04x didn't fit in the Data field",
+					elem->rt->addr);
+				return 0;
+			}
+
+			LOG_ERR("Too large device composition");
+			return -E2BIG;
+		}
 
 		data_buf_add_u8_offset(buf, elem->model_count, &offset);
 		data_buf_add_u8_offset(buf, elem->vnd_model_count, &offset);
@@ -1008,7 +1044,7 @@ static void mod_ext(const struct bt_mesh_model *mod, const struct bt_mesh_elem *
 {
 	const struct bt_mesh_model *extending_mod = NULL;
 
-	if (mod->cb->extends == NULL) {
+	if (mod->cb == NULL || mod->cb->extends == NULL) {
 		return;
 	}
 
@@ -2183,7 +2219,6 @@ size_t comp_page_1_size(void)
 	comp = bt_mesh_comp_get();
 
 	for (int i = 0; i < comp->elem_count; i++) {
-
 		size += page1_elem_size(&comp->elem[i]);
 	}
 
