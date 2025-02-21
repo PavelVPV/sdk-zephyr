@@ -901,6 +901,42 @@ static int bt_mesh_vnd_mod_msg_cid_check(const struct bt_mesh_model *mod)
 }
 #endif
 
+static void extention_tree_update(const struct bt_mesh_model *extending_mod,
+				  const struct bt_mesh_model *base_mod)
+{
+	const struct bt_mesh_model *a = extending_mod;
+	const struct bt_mesh_model *b = base_mod;
+	const struct bt_mesh_model *a_next = a->rt->next;
+	const struct bt_mesh_model *b_next = b->rt->next;
+	const struct bt_mesh_model *it;
+
+	base_mod->rt->flags |= BT_MESH_MOD_EXTENDED;
+
+	if (a == b) {
+		return;
+	}
+
+	/* Check if a's list contains b */
+	for (it = a; (it != NULL) && (it->rt->next != a); it = it->rt->next) {
+		if (it == b) {
+			return;
+		}
+	}
+
+	/* Merge lists */
+	if (a_next) {
+		b->rt->next = a_next;
+	} else {
+		b->rt->next = a;
+	}
+
+	if (b_next) {
+		a->rt->next = b_next;
+	} else {
+		a->rt->next = b;
+	}
+}
+
 static void mod_init(const struct bt_mesh_model *mod, const struct bt_mesh_elem *elem,
 		     bool vnd, bool primary, void *user_data)
 {
@@ -938,11 +974,15 @@ static void mod_init(const struct bt_mesh_model *mod, const struct bt_mesh_elem 
 	if (mod->cb && mod->cb->init) {
 		*err = mod->cb->init(mod);
 	}
+}
 
+static void mod_ext(const struct bt_mesh_model *mod, const struct bt_mesh_elem *elem,
+		    bool vnd, bool primary, void *user_data)
+{
 	const struct bt_mesh_model *extending_mod = NULL;
 
 	while ((extending_mod = mod->cb->extends(mod, extending_mod)) != NULL) {
-		extending_mod->rt->flags |= BT_MESH_MOD_EXTENDED;
+		extention_tree_update(extending_mod, mod);
 	}
 }
 
@@ -960,6 +1000,7 @@ int bt_mesh_comp_register(const struct bt_mesh_comp *comp)
 	err = 0;
 
 	bt_mesh_model_foreach(mod_init, &err);
+	bt_mesh_model_foreach(mod_ext, &err);
 
 	return err;
 }
@@ -1577,15 +1618,14 @@ void bt_mesh_model_extensions_walk(const struct bt_mesh_model *model,
 	(void)cb(model, user_data);
 	return;
 #else
-	const struct bt_mesh_model *it = NULL;
+	const struct bt_mesh_model *it;
 
-	if (cb(model, user_data) == BT_MESH_WALK_STOP || !model->cb->extends ||
-	    !model->cb->extends(model, it)) {
+	if (cb(model, user_data) == BT_MESH_WALK_STOP || !model->rt->next) {
 		return;
 	}
 
 	/* List is circular. Step through all models until we reach the start: */
-	for (it = model->cb->extends(model, it); it != NULL; it = model->cb->extends(model, it)) {
+	for (it = model->rt->next; it != model; it = it->rt->next) {
 		if (cb(it, user_data) == BT_MESH_WALK_STOP) {
 			return;
 		}

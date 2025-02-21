@@ -306,9 +306,20 @@ static int brg_cfg_srv_init(const struct bt_mesh_model *model)
 	model->keys[0] = BT_MESH_KEY_DEV_LOCAL;
 	model->rt->flags |= BT_MESH_MOD_DEVKEY_ONLY;
 
-	bt_mesh_model_extend(model, config_srv);
-
 	return 0;
+}
+
+static const struct bt_mesh_model * brg_cfg_srv_extends(const struct bt_mesh_model *model,
+							const struct bt_mesh_model *ext_model)
+{
+	const struct bt_mesh_model *config_srv =
+		bt_mesh_model_find(bt_mesh_model_elem(model), BT_MESH_MODEL_ID_CFG_SRV);
+
+	if (ext_model == NULL) {
+		return config_srv;
+	}
+
+	return NULL;
 }
 
 void brg_cfg_srv_reset(const struct bt_mesh_model *model)
@@ -318,5 +329,6 @@ void brg_cfg_srv_reset(const struct bt_mesh_model *model)
 
 const struct bt_mesh_model_cb _bt_mesh_brg_cfg_srv_cb = {
 	.init = brg_cfg_srv_init,
+	.extends = brg_cfg_srv_extends,
 	.reset = brg_cfg_srv_reset,
 };

@@ -96,8 +96,6 @@ static int od_priv_proxy_srv_init(const struct bt_mesh_model *mod)
 	mod->keys[0] = BT_MESH_KEY_DEV_LOCAL;
 	mod->rt->flags |= BT_MESH_MOD_DEVKEY_ONLY;
 
-	bt_mesh_model_extend(mod, priv_beacon_srv);
-
 	if (sol_pdu_rpl_srv != NULL) {
 		bt_mesh_model_correspond(mod, sol_pdu_rpl_srv);
 	} else {
@@ -106,6 +104,19 @@ static int od_priv_proxy_srv_init(const struct bt_mesh_model *mod)
 	}
 
 	return 0;
+}
+
+static const struct bt_mesh_model * od_priv_proxy_srv_extends(const struct bt_mesh_model *model,
+							      const struct bt_mesh_model *ext_model)
+{
+	const struct bt_mesh_model *priv_beacon_srv =
+		bt_mesh_model_find(bt_mesh_model_elem(model), BT_MESH_MODEL_ID_PRIV_BEACON_SRV);
+
+	if (ext_model == NULL) {
+		return priv_beacon_srv;
+	}
+
+	return NULL;
 }
 
 static void od_priv_proxy_srv_reset(const struct bt_mesh_model *model)
@@ -144,6 +155,7 @@ static void od_priv_proxy_srv_pending_store(const struct bt_mesh_model *model)
 
 const struct bt_mesh_model_cb _bt_mesh_od_priv_proxy_srv_cb = {
 	.init = od_priv_proxy_srv_init,
+	.extends = od_priv_proxy_srv_extends,
 	.reset = od_priv_proxy_srv_reset,
 #ifdef CONFIG_BT_SETTINGS
 	.settings_set = od_priv_proxy_srv_settings_set,
