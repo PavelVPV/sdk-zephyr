@@ -62,7 +62,9 @@ static const struct bt_mesh_comp2 *dev_comp2;
 static uint16_t dev_primary_addr;
 static void (*msg_cb)(uint32_t opcode, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf);
 
+#if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS) && defined(CONFIG_BT_MESH_COMP_PAGE_1)
 static uint8_t cor_group_id;
+#endif
 
 static const struct {
 	uint8_t *path;
@@ -417,8 +419,10 @@ int bt_mesh_comp_data_get_page_0(struct net_buf_simple *buf, size_t offset)
 
 static uint32_t extended_models_count(const struct bt_mesh_model *base_mod, bool *format)
 {
-	const struct bt_mesh_model *extending_mod = NULL;
 	uint32_t ext_mod_cnt = 0;
+
+#if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS)
+	const struct bt_mesh_model *extending_mod = NULL;
 
 	if (base_mod->cb == NULL || base_mod->cb->extends == NULL) {
 		return 0;
@@ -437,8 +441,7 @@ static uint32_t extended_models_count(const struct bt_mesh_model *base_mod, bool
 
 		ext_mod_cnt++;
 	}
-
-	LOG_WRN("ext_mod_cnt: %d", ext_mod_cnt);
+#endif
 
 	return ext_mod_cnt;
 }
@@ -446,6 +449,7 @@ static uint32_t extended_models_count(const struct bt_mesh_model *base_mod, bool
 static void prep_model_item_header(struct net_buf_simple *buf, const struct bt_mesh_model *mod,
 				   bool format, uint32_t ext_mod_cnt, size_t *offset)
 {
+#if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS) && defined(CONFIG_BT_MESH_COMP_PAGE_1)
 	bool cor_present = mod->rt->cor_group_id != 0;
 	uint8_t mod_elem_info = 0;
 
@@ -466,11 +470,13 @@ static void prep_model_item_header(struct net_buf_simple *buf, const struct bt_m
 	if (cor_present) {
 		data_buf_add_u8_offset(buf, mod->rt->cor_group_id - 1, offset);
 	}
+#endif
 }
 
 static void add_items_to_page(struct net_buf_simple *buf, const struct bt_mesh_model *mod,
 			      bool format, size_t *offset)
 {
+#if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS)
 	const struct bt_mesh_model *extending_mod = NULL;
 
 	if (mod->cb->extends == NULL) {
@@ -501,12 +507,14 @@ static void add_items_to_page(struct net_buf_simple *buf, const struct bt_mesh_m
 					       offset);
 		}
 	}
+#endif
 }
 
 static size_t page1_elem_size(const struct bt_mesh_elem *elem)
 {
 	size_t temp_size = 2;
 
+#if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS) && defined(CONFIG_BT_MESH_COMP_PAGE_1)
 	struct {
 		uint32_t count;
 		const struct bt_mesh_model *models;
@@ -534,6 +542,7 @@ static size_t page1_elem_size(const struct bt_mesh_elem *elem)
 			temp_size += fmt_long ? ext_mod_cnt * 2 : ext_mod_cnt;
 		}
 	}
+#endif
 
 	return temp_size;
 }
@@ -964,6 +973,7 @@ static int bt_mesh_vnd_mod_msg_cid_check(const struct bt_mesh_model *mod)
 }
 #endif
 
+#if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS)
 static void extention_tree_update(const struct bt_mesh_model *extending_mod,
 				  const struct bt_mesh_model *base_mod)
 {
@@ -999,6 +1009,7 @@ static void extention_tree_update(const struct bt_mesh_model *extending_mod,
 		a->rt->next = b;
 	}
 }
+#endif
 
 static void mod_init(const struct bt_mesh_model *mod, const struct bt_mesh_elem *elem,
 		     bool vnd, bool primary, void *user_data)
@@ -1042,6 +1053,7 @@ static void mod_init(const struct bt_mesh_model *mod, const struct bt_mesh_elem 
 static void mod_ext(const struct bt_mesh_model *mod, const struct bt_mesh_elem *elem,
 		    bool vnd, bool primary, void *user_data)
 {
+#if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS)
 	const struct bt_mesh_model *extending_mod = NULL;
 
 	if (mod->cb == NULL || mod->cb->extends == NULL) {
@@ -1051,6 +1063,7 @@ static void mod_ext(const struct bt_mesh_model *mod, const struct bt_mesh_elem *
 	while ((extending_mod = mod->cb->extends(mod, extending_mod)) != NULL) {
 		extention_tree_update(extending_mod, mod);
 	}
+#endif
 }
 
 int bt_mesh_comp_register(const struct bt_mesh_comp *comp)
@@ -1067,7 +1080,10 @@ int bt_mesh_comp_register(const struct bt_mesh_comp *comp)
 	err = 0;
 
 	bt_mesh_model_foreach(mod_init, &err);
-	bt_mesh_model_foreach(mod_ext, &err);
+
+	if (IS_ENABLED(CONFIG_BT_MESH_MODEL_EXTENSIONS)) {
+		bt_mesh_model_foreach(mod_ext, &err);
+	}
 
 	return err;
 }

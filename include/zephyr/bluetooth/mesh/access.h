@@ -880,10 +880,6 @@ struct bt_mesh_model_cb {
 #ifdef CONFIG_BT_MESH_MODEL_EXTENSIONS
 	const struct bt_mesh_model * (*const extends)(const struct bt_mesh_model *model,
 						      const struct bt_mesh_model *ext_model);
-//#ifdef CONFIG_BT_MESH_COMP_PAGE_1
-//	const struct bt_mesh_model * (*const corresponds)(const struct bt_mesh_model *model,
-//							  const struct bt_mesh_model *cor_model);
-//#endif
 #endif
 };
 
@@ -913,7 +909,10 @@ struct bt_mesh_model {
 #ifdef CONFIG_BT_MESH_MODEL_EXTENSIONS
 		/* Pointer to the next model in a model extension list. */
 		const struct bt_mesh_model *next;
+		/* Corresponding Group ID. */
+#ifdef CONFIG_BT_MESH_COMP_PAGE_1
 		uint16_t cor_group_id;
+#endif
 #endif
 		/** Model-specific user data */
 		void *user_data;
