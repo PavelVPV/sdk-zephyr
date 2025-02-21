@@ -428,8 +428,8 @@ static uint32_t extended_models_count(const struct bt_mesh_model *base_mod, bool
 		return 0;
 	}
 
-	LOG_WRN("%s: mod[%d:%d], cb: %p", __func__, base_mod->rt->elem_idx, base_mod->rt->mod_idx,
-		base_mod->cb->extends);
+//	LOG_WRN("%s: mod[%d:%d], cb: %p", __func__, base_mod->rt->elem_idx, base_mod->rt->mod_idx,
+//		base_mod->cb->extends);
 
 	while ((extending_mod = base_mod->cb->extends(base_mod, extending_mod)) != NULL) {
 		int32_t elem_offset = base_mod->rt->elem_idx - extending_mod->rt->elem_idx;
@@ -464,8 +464,8 @@ static void prep_model_item_header(struct net_buf_simple *buf, const struct bt_m
 	mod_elem_info |= (ext_mod_cnt & 0xFF) << 2;
 	data_buf_add_u8_offset(buf, mod_elem_info, offset);
 
-	LOG_WRN("mod[%d:%d]: cp: %d, cid: %d, ext_mod_cnt: %d", mod->rt->elem_idx, mod->rt->mod_idx,
-		cor_present, mod->rt->cor_group_id, ext_mod_cnt);
+//	LOG_WRN("mod[%d:%d]: cp: %d, cid: %d, ext_mod_cnt: %d", mod->rt->elem_idx, mod->rt->mod_idx,
+//		cor_present, mod->rt->cor_group_id, ext_mod_cnt);
 
 	if (cor_present) {
 		data_buf_add_u8_offset(buf, mod->rt->cor_group_id - 1, offset);
@@ -486,8 +486,8 @@ static void add_items_to_page(struct net_buf_simple *buf, const struct bt_mesh_m
 	while ((extending_mod = mod->cb->extends(mod, extending_mod)) != NULL) {
 		int32_t elem_offset = mod->rt->elem_idx - extending_mod->rt->elem_idx;
 
-		LOG_WRN("%s: elem_offset: %d, mod_idx: %d", __func__, elem_offset,
-			extending_mod->rt->mod_idx);
+//		LOG_WRN("%s: elem_offset: %d, mod_idx: %d", __func__, elem_offset,
+//			extending_mod->rt->mod_idx);
 
 		if (!format) {
 			if (elem_offset < 0) {
@@ -1729,11 +1729,11 @@ int bt_mesh_model_correspond(const struct bt_mesh_model *corresponding_mod,
 	 * If so, use that group for the base model.
 	 * If not, use new group id.
 	 */
-	LOG_WRN(">>> b[%d:%d]:%d,c[%d:%d]:%d,g:%d",
-		base_mod->rt->elem_idx, base_mod->rt->mod_idx,
-		base_mod->rt->cor_group_id,
-		corresponding_mod->rt->elem_idx, corresponding_mod->rt->mod_idx,
-		corresponding_mod->rt->cor_group_id, cor_group_id);
+//	LOG_WRN(">>> b[%d:%d]:%d,c[%d:%d]:%d,g:%d",
+//		base_mod->rt->elem_idx, base_mod->rt->mod_idx,
+//		base_mod->rt->cor_group_id,
+//		corresponding_mod->rt->elem_idx, corresponding_mod->rt->mod_idx,
+//		corresponding_mod->rt->cor_group_id, cor_group_id);
 
 	if (base_mod->rt->cor_group_id != 0) {
 		corresponding_mod->rt->cor_group_id = base_mod->rt->cor_group_id;
@@ -1744,11 +1744,11 @@ int bt_mesh_model_correspond(const struct bt_mesh_model *corresponding_mod,
 		corresponding_mod->rt->cor_group_id = base_mod->rt->cor_group_id;
 	}
 
-	LOG_WRN("<<< b[%d:%d]:%d,c[%d:%d]:%d,g:%d",
-		base_mod->rt->elem_idx, base_mod->rt->mod_idx,
-		base_mod->rt->cor_group_id,
-		corresponding_mod->rt->elem_idx, corresponding_mod->rt->mod_idx,
-		corresponding_mod->rt->cor_group_id, cor_group_id);
+//	LOG_WRN("<<< b[%d:%d]:%d,c[%d:%d]:%d,g:%d",
+//		base_mod->rt->elem_idx, base_mod->rt->mod_idx,
+//		base_mod->rt->cor_group_id,
+//		corresponding_mod->rt->elem_idx, corresponding_mod->rt->mod_idx,
+//		corresponding_mod->rt->cor_group_id, cor_group_id);
 
 	return 0;
 }
