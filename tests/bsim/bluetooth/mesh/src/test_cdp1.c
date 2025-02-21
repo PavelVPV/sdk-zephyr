@@ -146,7 +146,10 @@ static const struct bt_mesh_model * model_3_extends(const struct bt_mesh_model *
 						    const struct bt_mesh_model *ext_model)
 {
 	if (ext_model == NULL) {
-		return bt_mesh_model_find(&elems[0], TEST_MODEL_ID_4);
+		const struct bt_mesh_model * m = bt_mesh_model_find(&elems[1], TEST_MODEL_ID_4);
+		__ASSERT_NO_MSG(m);
+
+		return m;
 	}
 
 	return NULL;
@@ -256,7 +259,7 @@ static const struct bt_mesh_comp_p1_model_item test_p1_mod2 = {
 	.cor_present = 1,
 	.format = 0,
 	.ext_item_cnt = 1,
-	.cor_id = 0,
+	.cor_id = 1,
 };
 
 static const struct bt_mesh_comp_p1_model_item test_p1_mod3 = {
@@ -270,7 +273,7 @@ static const struct bt_mesh_comp_p1_model_item test_p1_mod4 = {
 	.cor_present = 1,
 	.format = 0,
 	.ext_item_cnt = 0,
-	.cor_id = 0,
+	.cor_id = 1,
 };
 
 static const struct bt_mesh_comp_p1_model_item test_p1_mod5 = {
@@ -366,6 +369,7 @@ static void provision_and_configure(struct bt_mesh_test_cfg cfg)
 static void verify_model_item(struct bt_mesh_comp_p1_model_item *mod_item, int elem_idx,
 			      int mod_idx, int offset)
 {
+	LOG_WRN("elem_idx: %d, mod_idx: %d, offset: %d", elem_idx, mod_idx, offset);
 	ASSERT_EQUAL(test_p1_elem_models[elem_idx][mod_idx + offset].cor_present,
 		     mod_item->cor_present);
 	ASSERT_EQUAL(test_p1_elem_models[elem_idx][mod_idx + offset].format, mod_item->format);
