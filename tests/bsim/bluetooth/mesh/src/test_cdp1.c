@@ -206,12 +206,6 @@ static const struct bt_mesh_model * model_vnd1_extends(const struct bt_mesh_mode
 	return NULL;
 }
 
-static const struct bt_mesh_model * model_vnd1_extends(const struct bt_mesh_model *model,
-						    const struct bt_mesh_model *ext_model)
-{
-	return NULL;
-}
-
 /* Hardcoded version of the CDP1 fields.
  * Extensions are named extending-model_base-model.
  */

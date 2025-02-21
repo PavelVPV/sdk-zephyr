@@ -981,6 +981,10 @@ static void mod_ext(const struct bt_mesh_model *mod, const struct bt_mesh_elem *
 {
 	const struct bt_mesh_model *extending_mod = NULL;
 
+	if (mod->cb->extends == NULL) {
+		return;
+	}
+
 	while ((extending_mod = mod->cb->extends(mod, extending_mod)) != NULL) {
 		extention_tree_update(extending_mod, mod);
 	}
