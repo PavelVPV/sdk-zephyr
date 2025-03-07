@@ -59,12 +59,9 @@ struct comp_foreach_model_arg {
 
 static const struct bt_mesh_comp *dev_comp;
 static const struct bt_mesh_comp2 *dev_comp2;
+static const struct bt_mesh_comp2 *dev_comp128;
 static uint16_t dev_primary_addr;
 static void (*msg_cb)(uint32_t opcode, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf);
-
-#if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS) && defined(CONFIG_BT_MESH_COMP_PAGE_1)
-static uint8_t cor_group_id;
-#endif
 
 static const struct {
 	uint8_t *path;
@@ -79,7 +76,8 @@ static const struct {
 #endif
 };
 
-void bt_mesh_model_foreach(void (*func)(const struct bt_mesh_model *mod,
+static void bt_mesh_model_foreach_comp(struct bt_mesh_comp *comp,
+				void (*func)(const struct bt_mesh_model *mod,
 					const struct bt_mesh_elem *elem,
 					bool vnd, bool primary,
 					void *user_data),
@@ -87,7 +85,7 @@ void bt_mesh_model_foreach(void (*func)(const struct bt_mesh_model *mod,
 {
 	int i, j;
 
-	for (i = 0; i < dev_comp->elem_count; i++) {
+	for (i = 0; i < comp->elem_count; i++) {
 		const struct bt_mesh_elem *elem = &dev_comp->elem[i];
 
 		for (j = 0; j < elem->model_count; j++) {
@@ -102,6 +100,15 @@ void bt_mesh_model_foreach(void (*func)(const struct bt_mesh_model *mod,
 			func(model, elem, true, i == 0, user_data);
 		}
 	}
+}
+
+void bt_mesh_model_foreach(void (*func)(const struct bt_mesh_model *mod,
+					const struct bt_mesh_elem *elem,
+					bool vnd, bool primary,
+					void *user_data),
+			   void *user_data)
+{
+	bt_mesh_model_foreach_comp(dev_comp, func, user_data);
 }
 
 static size_t bt_mesh_comp_elem_size(const struct bt_mesh_elem *elem)
@@ -547,13 +554,22 @@ static size_t page1_elem_size(const struct bt_mesh_elem *elem)
 	return temp_size;
 }
 
-static int bt_mesh_comp_data_get_page_1(struct net_buf_simple *buf, size_t offset)
+static int comp_data_get_page_1(uint8_t page, struct net_buf_simple *buf, size_t offset)
 {
 	const struct bt_mesh_comp *comp;
 
 	// TODO: I need to calculate max CDP size and alloc
 
-	comp = bt_mesh_comp_get();
+	if (page == 129) {
+		comp = dev_comp128;
+	} else {
+		comp = dev_comp;
+	}
+
+	if (!comp) {
+		LOG_ERR("Composition data page [%d] not registered", page);
+		return -ENODEV;
+	}
 
 	for (int i = 0; i < comp->elem_count; i++) {
 		const struct bt_mesh_elem *elem = &comp->elem[i];
@@ -616,18 +632,27 @@ static int bt_mesh_comp_data_get_page_1(struct net_buf_simple *buf, size_t offse
 	return 0;
 }
 
-static int bt_mesh_comp_data_get_page_2(struct net_buf_simple *buf, size_t offset)
+static int comp_data_get_page_2(uint8_t page, struct net_buf_simple *buf, size_t offset)
 {
-	if (!dev_comp2) {
+	struct bt_mesh_comp2 *comp2;
+
+	if (page == 2) {
+		comp2 = dev_comp2;
+	} else {
+		__ASSERT(false, "No Composition Data 130 available");
+		return -ENOENT;
+	}
+
+	if (!comp2) {
 		LOG_ERR("Composition data P2 not registered");
 		return -ENODEV;
 	}
 
 	size_t elem_size;
 
-	for (int i = 0; i < dev_comp2->record_cnt; i++) {
+	for (int i = 0; i < comp2->record_cnt; i++) {
 		elem_size =
-			8 + dev_comp2->record[i].elem_offset_cnt + dev_comp2->record[i].data_len;
+			8 + comp2->record[i].elem_offset_cnt + comp2->record[i].data_len;
 		if (offset >= elem_size) {
 			offset -= elem_size;
 			continue;
@@ -647,20 +672,20 @@ static int bt_mesh_comp_data_get_page_2(struct net_buf_simple *buf, size_t offse
 			return -E2BIG;
 		}
 
-		data_buf_add_le16_offset(buf, dev_comp2->record[i].id, &offset);
-		data_buf_add_u8_offset(buf, dev_comp2->record[i].version.x, &offset);
-		data_buf_add_u8_offset(buf, dev_comp2->record[i].version.y, &offset);
-		data_buf_add_u8_offset(buf, dev_comp2->record[i].version.z, &offset);
-		data_buf_add_u8_offset(buf, dev_comp2->record[i].elem_offset_cnt, &offset);
-		if (dev_comp2->record[i].elem_offset_cnt) {
-			data_buf_add_mem_offset(buf, dev_comp2->record[i].elem_offset,
-						dev_comp2->record[i].elem_offset_cnt, &offset);
+		data_buf_add_le16_offset(buf, comp2->record[i].id, &offset);
+		data_buf_add_u8_offset(buf, comp2->record[i].version.x, &offset);
+		data_buf_add_u8_offset(buf, comp2->record[i].version.y, &offset);
+		data_buf_add_u8_offset(buf, comp2->record[i].version.z, &offset);
+		data_buf_add_u8_offset(buf, comp2->record[i].elem_offset_cnt, &offset);
+		if (comp2->record[i].elem_offset_cnt) {
+			data_buf_add_mem_offset(buf, comp2->record[i].elem_offset,
+						comp2->record[i].elem_offset_cnt, &offset);
 		}
 
-		data_buf_add_le16_offset(buf, dev_comp2->record[i].data_len, &offset);
-		if (dev_comp2->record[i].data_len) {
-			data_buf_add_mem_offset(buf, dev_comp2->record[i].data,
-						dev_comp2->record[i].data_len, &offset);
+		data_buf_add_le16_offset(buf, comp2->record[i].data_len, &offset);
+		if (comp2->record[i].data_len) {
+			data_buf_add_mem_offset(buf, comp2->record[i].data,
+						comp2->record[i].data_len, &offset);
 		}
 	}
 
@@ -1083,7 +1108,12 @@ int bt_mesh_comp_register(const struct bt_mesh_comp *comp)
 
 	if (IS_ENABLED(CONFIG_BT_MESH_MODEL_EXTENSIONS)) {
 		bt_mesh_model_foreach(mod_ext, &err);
+
+		if (IS_ENABLED(CONFIG_BT_MESH_COMP_PAGE_1)) {
+			bt_mesh_model_foreach(mod_cor, &err);
+		}
 	}
+
 
 	return err;
 }
@@ -1716,12 +1746,17 @@ void bt_mesh_model_extensions_walk(const struct bt_mesh_model *model,
 #endif
 }
 
-#ifdef CONFIG_BT_MESH_MODEL_EXTENSIONS
-int bt_mesh_model_correspond(const struct bt_mesh_model *corresponding_mod,
-			     const struct bt_mesh_model *base_mod)
+#if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS) && defined(CONFIG_BT_MESH_COMP_PAGE_1)
+static void mod_cor(const struct bt_mesh_model *mod, const struct bt_mesh_elem *elem, bool vnd,
+		    bool primary, void *user_data)
 {
-	__ASSERT_NO_MSG(corresponding_mod);
-	__ASSERT_NO_MSG(base_mod);
+	uint8_t cor_group_id;
+	const struct bt_mesh_model *base_mod = NULL;
+
+	if (mod->cb == NULL || mod->cb->extends == NULL) {
+		return;
+	}
+
 	/** Check first if the base model has already an assigned group
 	 * If so, use that group for corresponding model.
 	 * If not, check if the corresponding model has already an assigned
@@ -1729,30 +1764,18 @@ int bt_mesh_model_correspond(const struct bt_mesh_model *corresponding_mod,
 	 * If so, use that group for the base model.
 	 * If not, use new group id.
 	 */
-//	LOG_WRN(">>> b[%d:%d]:%d,c[%d:%d]:%d,g:%d",
-//		base_mod->rt->elem_idx, base_mod->rt->mod_idx,
-//		base_mod->rt->cor_group_id,
-//		corresponding_mod->rt->elem_idx, corresponding_mod->rt->mod_idx,
-//		corresponding_mod->rt->cor_group_id, cor_group_id);
-
-	if (base_mod->rt->cor_group_id != 0) {
-		corresponding_mod->rt->cor_group_id = base_mod->rt->cor_group_id;
-	} else if (corresponding_mod->rt->cor_group_id != 0) {
-		base_mod->rt->cor_group_id = corresponding_mod->rt->cor_group_id;
-	} else {
-		base_mod->rt->cor_group_id = ++cor_group_id;
-		corresponding_mod->rt->cor_group_id = base_mod->rt->cor_group_id;
+	while ((base_mod = mod->cb->corresponds(mod, base_mod)) != NULL) {
+		if (base_mod->rt->cor_group_id != 0) {
+			corresponding_mod->rt->cor_group_id = base_mod->rt->cor_group_id;
+		} else if (corresponding_mod->rt->cor_group_id != 0) {
+			base_mod->rt->cor_group_id = corresponding_mod->rt->cor_group_id;
+		} else {
+			base_mod->rt->cor_group_id = ++cor_group_id;
+			corresponding_mod->rt->cor_group_id = base_mod->rt->cor_group_id;
+		}
 	}
-
-//	LOG_WRN("<<< b[%d:%d]:%d,c[%d:%d]:%d,g:%d",
-//		base_mod->rt->elem_idx, base_mod->rt->mod_idx,
-//		base_mod->rt->cor_group_id,
-//		corresponding_mod->rt->elem_idx, corresponding_mod->rt->mod_idx,
-//		corresponding_mod->rt->cor_group_id, cor_group_id);
-
-	return 0;
 }
-#endif /* CONFIG_BT_MESH_MODEL_EXTENSIONS */
+#endif /* CONFIG_BT_MESH_MODEL_EXTENSIONS && CONFIG_BT_MESH_COMP_PAGE_1 */
 
 bool bt_mesh_model_is_extended(const struct bt_mesh_model *model)
 {
@@ -2203,21 +2226,30 @@ int bt_mesh_comp_data_get_page(struct net_buf_simple *buf, size_t page, size_t o
 	if (page == 0 || page == 128) {
 		return bt_mesh_comp_data_get_page_0(buf, offset);
 	} else if (IS_ENABLED(CONFIG_BT_MESH_COMP_PAGE_1) && (page == 1 || page == 129)) {
-		return bt_mesh_comp_data_get_page_1(buf, offset);
+		return comp_data_get_page_1(page, buf, offset);
 	} else if (IS_ENABLED(CONFIG_BT_MESH_COMP_PAGE_2) && (page == 2 || page == 130)) {
-		return bt_mesh_comp_data_get_page_2(buf, offset);
+		return comp_data_get_page_2(page, buf, offset);
 	}
 
 	return -EINVAL;
 }
 
-size_t comp_page_0_size(void)
+static size_t comp_page_0_size(uint8_t page)
 {
 	const struct bt_mesh_comp *comp;
 	const struct bt_mesh_elem *elem;
 	size_t size = 10; /* Non-variable length params of comp page 0. */
 
-	comp = bt_mesh_comp_get();
+	if (page == 0) {
+		comp = dev_comp;
+	} else {
+		comp = dev_comp128;
+	}
+
+	if (!comp) {
+		LOG_ERR("Composition data page [%d] not registered", page);
+		return size;
+	}
 
 	for (int i = 0; i < comp->elem_count; i++) {
 		elem = &comp->elem[i];
@@ -2227,12 +2259,21 @@ size_t comp_page_0_size(void)
 	return size;
 }
 
-size_t comp_page_1_size(void)
+static size_t comp_page_1_size(uint8_t page)
 {
 	const struct bt_mesh_comp *comp;
 	size_t size = 0;
 
-	comp = bt_mesh_comp_get();
+	if (page == 1) {
+		comp = dev_comp;
+	} else {
+		comp = dev_comp128;
+	}
+
+	if (!comp) {
+		LOG_ERR("Composition data page [%d] not registered", page);
+		return size;
+	}
 
 	for (int i = 0; i < comp->elem_count; i++) {
 		size += page1_elem_size(&comp->elem[i]);
@@ -2241,29 +2282,38 @@ size_t comp_page_1_size(void)
 	return size;
 }
 
-size_t comp_page_2_size(void)
+static size_t comp_page_2_size(uint8_t page)
 {
+	const struct bt_mesh_comp2 *comp2;
 	size_t size = 0;
 
-	if (!dev_comp2) {
+	if (page == 2) {
+		comp2 = dev_comp2;
+	} else {
+		__ASSERT(false, "Page 130 is not yet supported");
+		return 0;
+	}
+
+	if (!comp) {
 		LOG_ERR("Composition data P2 not registered");
 		return size;
 	}
 
-	for (int i = 0; i < dev_comp2->record_cnt; i++) {
-		size += 8 + dev_comp2->record[i].elem_offset_cnt + dev_comp2->record[i].data_len;
+	for (int i = 0; i < comp2->record_cnt; i++) {
+		size += 8 + comp2->record[i].elem_offset_cnt + comp2->record[i].data_len;
 	}
+
 	return size;
 }
 
 size_t bt_mesh_comp_page_size(uint8_t page)
 {
 	if (page == 0 || page == 128) {
-		return comp_page_0_size();
+		return comp_page_0_size(page);
 	} else if (IS_ENABLED(CONFIG_BT_MESH_COMP_PAGE_1) && (page == 1 || page == 129)) {
-		return comp_page_1_size();
+		return comp_page_1_size(page);
 	} else if (IS_ENABLED(CONFIG_BT_MESH_COMP_PAGE_2) && (page == 2 || page == 130)) {
-		return comp_page_2_size();
+		return comp_page_2_size(page);
 	}
 
 	return 0;
@@ -2302,6 +2352,16 @@ int bt_mesh_comp_store(void)
 	}
 
 	return 0;
+}
+
+// FIXME: Should also get CDP130
+int bt_mesh_comp128_reg(struct bt_mesh_comp *comp)
+{
+	dev_comp128 = comp;
+
+	bt_mesh_model_foreach_comp(dev_comp128, mod_cor, &err);
+
+	atomic_set_bit(bt_mesh.flags, BT_MESH_COMP128);
 }
 
 int bt_mesh_comp_change_prepare(void)
