@@ -166,9 +166,9 @@ struct bt_mesh_elem {
 	const uint8_t vnd_model_count;
 
 	/** The list of SIG models in this element */
-	const struct bt_mesh_model * const models;
+	const struct bt_mesh_model ** const models;
 	/** The list of vendor models in this element */
-	const struct bt_mesh_model * const vnd_models;
+	const struct bt_mesh_model ** const vnd_models;
 };
 
 /**
@@ -408,6 +408,24 @@ struct bt_mesh_model_op {
 #define BT_MESH_MODEL_NO_OPS ((struct bt_mesh_model_op []) \
 			      { BT_MESH_MODEL_OP_END })
 
+#define BT_MESH_MODEL_EXTENDS(...) (const struct bt_mesh_model *[]) { __VA_ARGS__ }
+#define BT_MESH_MODEL_CORRESPONDS(...) (const struct bt_mesh_model *[]) { __VA_ARGS__ }
+
+#define BT_MESH_MODEL_REL_CB(_id, _op, _pub, _user_data, _cb, _extends, _corr)	\
+{										\
+	.id = (_id),                                                         \
+	BT_MESH_MODEL_RUNTIME_INIT(_user_data)				     \
+	.pub = _pub,                                                         \
+	.keys = (uint16_t []) BT_MESH_MODEL_KEYS_UNUSED(CONFIG_BT_MESH_MODEL_KEY_COUNT), \
+	.keys_cnt = CONFIG_BT_MESH_MODEL_KEY_COUNT,                          \
+	.groups = (uint16_t []) BT_MESH_MODEL_GROUPS_UNASSIGNED(CONFIG_BT_MESH_MODEL_GROUP_COUNT), \
+	.groups_cnt = CONFIG_BT_MESH_MODEL_GROUP_COUNT,                      \
+	BT_MESH_MODEL_UUIDS_UNASSIGNED()                                     \
+	.op = _op,                                                           \
+	.cb = _cb,                                                           \
+	.extends = _extends,                                                 \
+	.corresponds = _corr                                                 \
+}
 /**
  *  @brief Helper to define an empty model array
  *
@@ -917,6 +935,13 @@ struct bt_mesh_model {
 		/** Model-specific user data */
 		void *user_data;
 	} * const rt;
+
+#ifdef CONFIG_BT_MESH_MODEL_EXTENSIONS
+	const struct bt_mesh_model ** const extends;
+#ifdef CONFIG_BT_MESH_COMP_PAGE_1
+	const struct bt_mesh_model ** const corresponds;
+#endif
+#endif
 
 	/** Model Publication */
 	struct bt_mesh_model_pub * const pub;

@@ -91,13 +91,13 @@ void bt_mesh_model_foreach(void (*func)(const struct bt_mesh_model *mod,
 		const struct bt_mesh_elem *elem = &dev_comp->elem[i];
 
 		for (j = 0; j < elem->model_count; j++) {
-			const struct bt_mesh_model *model = &elem->models[j];
+			const struct bt_mesh_model *model = elem->models[j];
 
 			func(model, elem, false, i == 0, user_data);
 		}
 
 		for (j = 0; j < elem->vnd_model_count; j++) {
-			const struct bt_mesh_model *model = &elem->vnd_models[j];
+			const struct bt_mesh_model *model = elem->vnd_models[j];
 
 			func(model, elem, true, i == 0, user_data);
 		}
@@ -202,13 +202,13 @@ size_t bt_mesh_metadata_page_0_size(void)
 			sizeof(elem->vnd_model_count);
 
 		for (j = 0; j < elem->model_count; j++) {
-			const struct bt_mesh_model *model = &elem->models[j];
+			const struct bt_mesh_model *model = elem->models[j];
 
 			size += metadata_model_size(model, elem, false);
 		}
 
 		for (j = 0; j < elem->vnd_model_count; j++) {
-			const struct bt_mesh_model *model = &elem->vnd_models[j];
+			const struct bt_mesh_model *model = elem->vnd_models[j];
 
 			size += metadata_model_size(model, elem, true);
 		}
@@ -287,7 +287,7 @@ int bt_mesh_metadata_get_page_0(struct net_buf_simple *buf, size_t offset)
 		vnd_count_ptr = data_buf_add_u8_offset(buf, 0, &offset);
 
 		for (j = 0; j < elem->model_count; j++) {
-			const struct bt_mesh_model *model = &elem->models[j];
+			const struct bt_mesh_model *model = elem->models[j];
 
 			if (!model->metadata) {
 				continue;
@@ -304,7 +304,7 @@ int bt_mesh_metadata_get_page_0(struct net_buf_simple *buf, size_t offset)
 		}
 
 		for (j = 0; j < elem->vnd_model_count; j++) {
-			const struct bt_mesh_model *model = &elem->vnd_models[j];
+			const struct bt_mesh_model *model = elem->vnd_models[j];
 
 			if (!model->metadata) {
 				continue;
@@ -361,13 +361,13 @@ static int comp_add_elem(struct net_buf_simple *buf, const struct bt_mesh_elem *
 	data_buf_add_u8_offset(buf, elem->vnd_model_count, offset);
 
 	for (i = 0; i < elem->model_count; i++) {
-		const struct bt_mesh_model *model = &elem->models[i];
+		const struct bt_mesh_model *model = elem->models[i];
 
 		comp_add_model(model, elem, false, &arg);
 	}
 
 	for (i = 0; i < elem->vnd_model_count; i++) {
-		const struct bt_mesh_model *model = &elem->vnd_models[i];
+		const struct bt_mesh_model *model = elem->vnd_models[i];
 
 		comp_add_model(model, elem, true, &arg);
 	}
@@ -517,7 +517,7 @@ static size_t page1_elem_size(const struct bt_mesh_elem *elem)
 #if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS) && defined(CONFIG_BT_MESH_COMP_PAGE_1)
 	struct {
 		uint32_t count;
-		const struct bt_mesh_model *models;
+		const struct bt_mesh_model **models;
 	} model_types[] = {
 		{
 			.count = elem->model_count,
@@ -531,7 +531,7 @@ static size_t page1_elem_size(const struct bt_mesh_elem *elem)
 
 	for (int j = 0; j < ARRAY_SIZE(model_types); j++) {
 		for (int k = 0; k < model_types[j].count; k++) {
-			const struct bt_mesh_model *mod = &model_types[j].models[k];
+			const struct bt_mesh_model *mod = model_types[j].models[k];
 			bool cor_present = mod->rt->cor_group_id != 0;
 			uint8_t ext_mod_cnt = 0;
 			bool fmt_long = false;
@@ -584,7 +584,7 @@ static int bt_mesh_comp_data_get_page_1(struct net_buf_simple *buf, size_t offse
 
 		struct {
 			uint32_t count;
-			const struct bt_mesh_model *models;
+			const struct bt_mesh_model **models;
 		} model_types[] = {
 			{
 				.count = elem->model_count,
@@ -598,7 +598,7 @@ static int bt_mesh_comp_data_get_page_1(struct net_buf_simple *buf, size_t offse
 
 		for (int j = 0; j < ARRAY_SIZE(model_types); j++) {
 			for (int k = 0; k < model_types[j].count; k++) {
-				const struct bt_mesh_model *base_mod = &model_types[j].models[k];
+				const struct bt_mesh_model *base_mod = model_types[j].models[k];
 				uint8_t ext_mod_cnt = 0;
 				bool fmt_long = false;
 
@@ -938,14 +938,14 @@ const struct bt_mesh_model *bt_mesh_model_get(bool vnd, uint8_t elem_idx, uint8_
 			return NULL;
 		}
 
-		return &elem->vnd_models[mod_idx];
+		return elem->vnd_models[mod_idx];
 	} else {
 		if (mod_idx >= elem->model_count) {
 			LOG_ERR("Invalid SIG model index %u", mod_idx);
 			return NULL;
 		}
 
-		return &elem->models[mod_idx];
+		return elem->models[mod_idx];
 	}
 }
 
@@ -1032,7 +1032,18 @@ static void mod_init(const struct bt_mesh_model *mod, const struct bt_mesh_elem 
 
 	mod->rt->elem_idx = elem - dev_comp->elem;
 	if (vnd) {
-		mod->rt->mod_idx = mod - elem->vnd_models;
+		size_t index;
+
+		mod->rt->mod_idx = (uint8_t) (-1);
+
+		for (index = 0; index < elem->vnd_model_count; index++) {
+			if (mod == elem->vnd_models[index]) {
+				mod->rt->mod_idx = index;
+				break;
+			}
+		}
+
+		__ASSERT_NO_MSG(mod->rt->mod_idx != (uint32_t) (-1));
 
 		if (IS_ENABLED(CONFIG_BT_MESH_MODEL_VND_MSG_CID_FORCE)) {
 			*err = bt_mesh_vnd_mod_msg_cid_check(mod);
@@ -1042,7 +1053,18 @@ static void mod_init(const struct bt_mesh_model *mod, const struct bt_mesh_elem 
 		}
 
 	} else {
-		mod->rt->mod_idx = mod - elem->models;
+		size_t index;
+
+		mod->rt->mod_idx = (uint8_t) (-1);
+
+		for (index = 0; index < elem->model_count; index++) {
+			if (mod == elem->models[index]) {
+				mod->rt->mod_idx = index;
+				break;
+			}
+		}
+
+		__ASSERT_NO_MSG(mod->rt->mod_idx != (uint32_t) (-1));
 	}
 
 	if (mod->cb && mod->cb->init) {
@@ -1256,7 +1278,7 @@ static const struct bt_mesh_model *bt_mesh_elem_find_group(const struct bt_mesh_
 	int i;
 
 	for (i = 0; i < elem->model_count; i++) {
-		model = &elem->models[i];
+		model = elem->models[i];
 
 		match = model_group_get(model, group_addr);
 		if (match) {
@@ -1265,7 +1287,7 @@ static const struct bt_mesh_model *bt_mesh_elem_find_group(const struct bt_mesh_
 	}
 
 	for (i = 0; i < elem->vnd_model_count; i++) {
-		model = &elem->vnd_models[i];
+		model = elem->vnd_models[i];
 
 		match = model_group_get(model, group_addr);
 		if (match) {
@@ -1388,7 +1410,7 @@ static const struct bt_mesh_model_op *find_op(const struct bt_mesh_elem *elem,
 	uint8_t count;
 	/* This value shall not be used in shipping end products. */
 	uint32_t cid = UINT32_MAX;
-	const struct bt_mesh_model *models;
+	const struct bt_mesh_model **models;
 
 	/* SIG models cannot contain 3-byte (vendor) OpCodes, and
 	 * vendor models cannot contain SIG (1- or 2-byte) OpCodes, so
@@ -1410,11 +1432,11 @@ static const struct bt_mesh_model_op *find_op(const struct bt_mesh_elem *elem,
 
 		if (IS_ENABLED(CONFIG_BT_MESH_MODEL_VND_MSG_CID_FORCE) &&
 		     cid != UINT32_MAX &&
-		     cid != models[i].vnd.company) {
+		     cid != models[i]->vnd.company) {
 			continue;
 		}
 
-		*model = &models[i];
+		*model = models[i];
 
 		for (op = (*model)->op; op->func; op++) {
 			if (op->opcode == opcode) {
@@ -1664,9 +1686,9 @@ const struct bt_mesh_model *bt_mesh_model_find_vnd(const struct bt_mesh_elem *el
 	uint8_t i;
 
 	for (i = 0U; i < elem->vnd_model_count; i++) {
-		if (elem->vnd_models[i].vnd.company == company &&
-		    elem->vnd_models[i].vnd.id == id) {
-			return &elem->vnd_models[i];
+		if (elem->vnd_models[i]->vnd.company == company &&
+		    elem->vnd_models[i]->vnd.id == id) {
+			return elem->vnd_models[i];
 		}
 	}
 
@@ -1679,8 +1701,8 @@ const struct bt_mesh_model *bt_mesh_model_find(const struct bt_mesh_elem *elem,
 	uint8_t i;
 
 	for (i = 0U; i < elem->model_count; i++) {
-		if (elem->models[i].id == id) {
-			return &elem->models[i];
+		if (elem->models[i]->id == id) {
+			return elem->models[i];
 		}
 	}
 
