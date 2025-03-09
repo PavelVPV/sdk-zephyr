@@ -131,6 +131,9 @@ extern "C" {
 				       BT_MESH_APP_SEG_SDU_MAX),	\
 				      BT_MESH_APP_UNSEG_SDU_MAX)
 
+#define BT_MESH_MODEL_PTR_LIST(...) ((const struct bt_mesh_model *[]){ __VA_ARGS__ })
+#define BT_MESH_MODEL_DECLARE(...) (& (const struct bt_mesh_model) __VA_ARGS__)
+
 /** Helper to define a mesh element within an array.
  *
  *  In case the element has no SIG or Vendor models the helper
