@@ -419,31 +419,23 @@ int bt_mesh_comp_data_get_page_0(struct net_buf_simple *buf, size_t offset)
 
 static uint32_t extended_models_count(const struct bt_mesh_model *base_mod, bool *format)
 {
-	uint32_t ext_mod_cnt = 0;
-
 #if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS)
-	const struct bt_mesh_model *extending_mod = NULL;
-
-	if (base_mod->cb == NULL || base_mod->cb->extends == NULL) {
+	if (base_mod->extends == NULL || base_mod->extends_cnt == 0) {
 		return 0;
 	}
 
-//	LOG_WRN("%s: mod[%d:%d], cb: %p", __func__, base_mod->rt->elem_idx, base_mod->rt->mod_idx,
-//		base_mod->cb->extends);
-
-	while ((extending_mod = base_mod->cb->extends(base_mod, extending_mod)) != NULL) {
+	for (size_t i = 0; i < base_mod->extends_cnt; i++) {
+		const struct bt_mesh_model *extending_mod = base_mod->extends[i];
 		int32_t elem_offset = base_mod->rt->elem_idx - extending_mod->rt->elem_idx;
 
 		if (elem_offset > 3 || elem_offset < -4 ||
 		    extending_mod->rt->mod_idx > 31) {
 			*format = true;
 		}
-
-		ext_mod_cnt++;
 	}
 #endif
 
-	return ext_mod_cnt;
+	return base_mod->extends_cnt;
 }
 
 static void prep_model_item_header(struct net_buf_simple *buf, const struct bt_mesh_model *mod,
@@ -477,13 +469,12 @@ static void add_items_to_page(struct net_buf_simple *buf, const struct bt_mesh_m
 			      bool format, size_t *offset)
 {
 #if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS)
-	const struct bt_mesh_model *extending_mod = NULL;
-
-	if (mod->cb->extends == NULL) {
+	if (mod->extends == NULL || mod->extends_cnt == 0) {
 		return;
 	}
 
-	while ((extending_mod = mod->cb->extends(mod, extending_mod)) != NULL) {
+	for (size_t i = 0; i < mod->extends_cnt; i++) {
+		const struct bt_mesh_model *extending_mod = mod->extends[i];
 		int32_t elem_offset = mod->rt->elem_idx - extending_mod->rt->elem_idx;
 
 //		LOG_WRN("%s: elem_offset: %d, mod_idx: %d", __func__, elem_offset,
@@ -1009,6 +1000,33 @@ static void extention_tree_update(const struct bt_mesh_model *extending_mod,
 		a->rt->next = b;
 	}
 }
+
+static void corresponding_group_id_set(const struct bt_mesh_model *mod)
+{
+	if (mod->corresponds == NULL || mod->corresponds_cnt == 0) {
+		return;
+	}
+
+	for (size_t i = 0; i < mod->corresponds_cnt; i++) {
+		const struct bt_mesh_model *corresponding_mod = mod->corresponds[i];
+
+		/** Check first if the base model has already an assigned group
+		 * If so, use that group for corresponding model.
+		 * If not, check if the corresponding model has already an assigned
+		 * group.
+		 * If so, use that group for the base model.
+		 * If not, use new group id.
+		 */
+		if (corresponding_mod->rt->cor_group_id != 0) {
+			mod->rt->cor_group_id = corresponding_mod->rt->cor_group_id;
+		} else if (mod->rt->cor_group_id != 0) {
+			corresponding_mod->rt->cor_group_id = mod->rt->cor_group_id;
+		} else {
+			mod->rt->cor_group_id = ++cor_group_id;
+			corresponding_mod->rt->cor_group_id = mod->rt->cor_group_id;
+		}
+	}
+}
 #endif
 
 static void mod_init(const struct bt_mesh_model *mod, const struct bt_mesh_elem *elem,
@@ -1076,15 +1094,15 @@ static void mod_ext(const struct bt_mesh_model *mod, const struct bt_mesh_elem *
 		    bool vnd, bool primary, void *user_data)
 {
 #if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS)
-	const struct bt_mesh_model *extending_mod = NULL;
+	if (mod->extends != NULL && mod->extends_cnt > 0) {
+		for (size_t i = 0; i < mod->extends_cnt; i++) {
+			const struct bt_mesh_model *base_mod = mod->extends[i];
 
-	if (mod->cb == NULL || mod->cb->extends == NULL) {
-		return;
+			extention_tree_update(mod, base_mod);
+		}
 	}
 
-	while ((extending_mod = mod->cb->extends(mod, extending_mod)) != NULL) {
-		extention_tree_update(extending_mod, mod);
-	}
+	corresponding_group_id_set(mod);
 #endif
 }
 
@@ -1737,44 +1755,6 @@ void bt_mesh_model_extensions_walk(const struct bt_mesh_model *model,
 	}
 #endif
 }
-
-#ifdef CONFIG_BT_MESH_MODEL_EXTENSIONS
-int bt_mesh_model_correspond(const struct bt_mesh_model *corresponding_mod,
-			     const struct bt_mesh_model *base_mod)
-{
-	__ASSERT_NO_MSG(corresponding_mod);
-	__ASSERT_NO_MSG(base_mod);
-	/** Check first if the base model has already an assigned group
-	 * If so, use that group for corresponding model.
-	 * If not, check if the corresponding model has already an assigned
-	 * group.
-	 * If so, use that group for the base model.
-	 * If not, use new group id.
-	 */
-//	LOG_WRN(">>> b[%d:%d]:%d,c[%d:%d]:%d,g:%d",
-//		base_mod->rt->elem_idx, base_mod->rt->mod_idx,
-//		base_mod->rt->cor_group_id,
-//		corresponding_mod->rt->elem_idx, corresponding_mod->rt->mod_idx,
-//		corresponding_mod->rt->cor_group_id, cor_group_id);
-
-	if (base_mod->rt->cor_group_id != 0) {
-		corresponding_mod->rt->cor_group_id = base_mod->rt->cor_group_id;
-	} else if (corresponding_mod->rt->cor_group_id != 0) {
-		base_mod->rt->cor_group_id = corresponding_mod->rt->cor_group_id;
-	} else {
-		base_mod->rt->cor_group_id = ++cor_group_id;
-		corresponding_mod->rt->cor_group_id = base_mod->rt->cor_group_id;
-	}
-
-//	LOG_WRN("<<< b[%d:%d]:%d,c[%d:%d]:%d,g:%d",
-//		base_mod->rt->elem_idx, base_mod->rt->mod_idx,
-//		base_mod->rt->cor_group_id,
-//		corresponding_mod->rt->elem_idx, corresponding_mod->rt->mod_idx,
-//		corresponding_mod->rt->cor_group_id, cor_group_id);
-
-	return 0;
-}
-#endif /* CONFIG_BT_MESH_MODEL_EXTENSIONS */
 
 bool bt_mesh_model_is_extended(const struct bt_mesh_model *model)
 {

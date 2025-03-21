@@ -411,8 +411,8 @@ struct bt_mesh_model_op {
 #define BT_MESH_MODEL_NO_OPS ((struct bt_mesh_model_op []) \
 			      { BT_MESH_MODEL_OP_END })
 
-#define BT_MESH_MODEL_EXTENDS(...) (const struct bt_mesh_model *[]) { __VA_ARGS__ }
-#define BT_MESH_MODEL_CORRESPONDS(...) (const struct bt_mesh_model *[]) { __VA_ARGS__ }
+#define BT_MESH_MODEL_EXTENDS(...) ((const struct bt_mesh_model *[]) { __VA_ARGS__ })
+#define BT_MESH_MODEL_CORRESPONDS(...) ((const struct bt_mesh_model *[]) { __VA_ARGS__ })
 
 #define BT_MESH_MODEL_REL_CB(_id, _op, _pub, _user_data, _cb, _extends, _corr)	\
 {										\
@@ -427,7 +427,9 @@ struct bt_mesh_model_op {
 	.op = _op,                                                           \
 	.cb = _cb,                                                           \
 	.extends = _extends,                                                 \
-	.corresponds = _corr                                                 \
+	.extends_cnt = ARRAY_SIZE(_extends),                                 \
+	.corresponds = _corr,                                                \
+	.corresponds_cnt = ARRAY_SIZE(_corr),                                \
 }
 /**
  *  @brief Helper to define an empty model array
@@ -889,10 +891,6 @@ struct bt_mesh_model_cb {
 	 *  @param model Model this callback belongs to.
 	 */
 	void (*const pending_store)(const struct bt_mesh_model *model);
-#ifdef CONFIG_BT_MESH_MODEL_EXTENSIONS
-	const struct bt_mesh_model * (*const extends)(const struct bt_mesh_model *model,
-						      const struct bt_mesh_model *ext_model);
-#endif
 };
 
 /** Vendor model ID */
@@ -932,8 +930,10 @@ struct bt_mesh_model {
 
 #ifdef CONFIG_BT_MESH_MODEL_EXTENSIONS
 	const struct bt_mesh_model ** const extends;
+	const uint16_t extends_cnt;
 #ifdef CONFIG_BT_MESH_COMP_PAGE_1
 	const struct bt_mesh_model ** const corresponds;
+	const uint16_t corresponds_cnt;
 #endif
 #endif
 
@@ -1102,57 +1102,6 @@ int bt_mesh_model_data_store(const struct bt_mesh_model *mod, bool vnd,
  *  @param mod      Mesh model.
  */
 void bt_mesh_model_data_store_schedule(const struct bt_mesh_model *mod);
-
-/** @brief Let a model extend another.
- *
- *  Mesh models may be extended to reuse their functionality, forming a more
- *  complex model. A Mesh model may extend any number of models, in any element.
- *  The extensions may also be nested, ie a model that extends another may
- *  itself be extended.
- *
- *  A set of models that extend each other form a model extension list.
- *
- *  All models in an extension list share one subscription list per element. The
- *  access layer will utilize the combined subscription list of all models in an
- *  extension list and element, giving the models extended subscription list
- *  capacity.
- *
- * If @kconfig{CONFIG_BT_MESH_COMP_PAGE_1} is enabled, it is not allowed to call
- * this function before the @ref bt_mesh_model_cb.init callback is called
- * for both models, except if it is called as part of the final callback.
- *
- *  @param extending_mod      Mesh model that is extending the base model.
- *  @param base_mod           The model being extended.
- *
- *  @retval 0 Successfully extended the base_mod model.
- */
-#if 0
-int bt_mesh_model_extend(const struct bt_mesh_model *extending_mod,
-			 const struct bt_mesh_model *base_mod);
-#endif
-
-/** @brief Let a model correspond to another.
- *
- *  Mesh models may correspond to each other, which means that if one is present,
- *  other must be present too. A Mesh model may correspond to any number of models,
- *  in any element. All models connected together via correspondence form single
- *  Correspondence Group, which has it's unique Correspondence ID. Information about
- *  Correspondence is used to construct Composition Data Page 1.
- *
- *  This function must be called on already initialized base_mod. Because this function
- *  is designed to be called in corresponding_mod initializer, this means that base_mod
- *  shall be initialized before corresponding_mod is.
- *
- *  @param corresponding_mod  Mesh model that is corresponding to the base model.
- *  @param base_mod           The model being corresponded to.
- *
- *  @retval 0 Successfully saved correspondence to the base_mod model.
- *  @retval -ENOMEM   There is no more space to save this relation.
- *  @retval -ENOTSUP  Composition Data Page 1 is not supported.
- */
-
-int bt_mesh_model_correspond(const struct bt_mesh_model *corresponding_mod,
-			     const struct bt_mesh_model *base_mod);
 
 /** @brief Check if model is extended by another model.
  *
