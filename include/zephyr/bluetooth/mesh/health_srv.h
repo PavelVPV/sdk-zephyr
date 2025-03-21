@@ -177,7 +177,10 @@ struct bt_mesh_health_srv {
 				  bt_mesh_health_srv_op,               \
 				  pub,                                 \
 				  srv,                                 \
-				  &bt_mesh_health_srv_cb, __VA_ARGS__)
+				  &bt_mesh_health_srv_cb, \
+				  BT_MESH_MODEL_EXTENDS(), \
+				  BT_MESH_MODEL_CORRESPONDS(), \
+				  __VA_ARGS__)
 
 /**
  *

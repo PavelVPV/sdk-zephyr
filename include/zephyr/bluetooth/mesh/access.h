@@ -455,18 +455,9 @@ struct bt_mesh_model_op {
  *  @param _cb        Callback structure, or NULL to keep no callbacks.
  */
 #define BT_MESH_MODEL_CNT_CB(_id, _op, _pub, _user_data, _keys, _grps, _cb)	\
-{										\
-	.id = (_id),								\
-	BT_MESH_MODEL_RUNTIME_INIT(_user_data)					\
-	.pub = _pub,								\
-	.keys = (uint16_t []) BT_MESH_MODEL_KEYS_UNUSED(_keys),			\
-	.keys_cnt = _keys,							\
-	.groups = (uint16_t []) BT_MESH_MODEL_GROUPS_UNASSIGNED(_grps),		\
-	.groups_cnt = _grps,							\
-	BT_MESH_MODEL_UUIDS_UNASSIGNED()					\
-	.op = _op,								\
-	.cb = _cb,								\
-}
+	BT_MESH_MODEL_REL_CB(_id, _op, _pub, _user_data, _cb,		\
+			     BT_MESH_MODEL_EXTENDS(),			\
+			     BT_MESH_MODEL_CORRESPONDS())
 
 /**
  *  @brief Composition data vendor model entry with callback functions
@@ -550,8 +541,8 @@ struct bt_mesh_model_op {
 	.metadata = _metadata,                                               \
 }
 #else
-#define BT_MESH_MODEL_METADATA_CB(_id, _op, _pub, _user_data, _cb, _metadata)  \
-	BT_MESH_MODEL_CB(_id, _op, _pub, _user_data, _cb)
+#define BT_MESH_MODEL_METADATA_CB(_id, _op, _pub, _user_data, _cb, _extends, _corr, _metadata)  \
+	BT_MESH_MODEL_REL_CB(_id, _op, _pub, _user_data, _cb, _extends, _corr)
 #endif
 
 /**
