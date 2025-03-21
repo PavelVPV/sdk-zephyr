@@ -47,11 +47,11 @@ static struct bt_mesh_brg_cfg_cli brg_cfg_cli;
 
 BT_MESH_SHELL_HEALTH_PUB_DEFINE(health_pub);
 
-static const struct bt_mesh_model root_models[] = {
-	BT_MESH_MODEL_CFG_SRV,
-	BT_MESH_MODEL_CFG_CLI(&cfg_cli),
-	BT_MESH_MODEL_HEALTH_SRV(&bt_mesh_shell_health_srv, &health_pub, health_srv_meta),
-	BT_MESH_MODEL_HEALTH_CLI(&bt_mesh_shell_health_cli),
+static const struct bt_mesh_model* root_models[] = {
+	BT_MESH_MODEL_DECLARE(BT_MESH_MODEL_CFG_SRV),
+	BT_MESH_MODEL_DECLARE(BT_MESH_MODEL_CFG_CLI(&cfg_cli)),
+	BT_MESH_MODEL_DECLARE(BT_MESH_MODEL_HEALTH_SRV(&bt_mesh_shell_health_srv, &health_pub, health_srv_meta)),
+	BT_MESH_MODEL_DECLARE(BT_MESH_MODEL_HEALTH_CLI(&bt_mesh_shell_health_cli)),
 #if defined(CONFIG_BT_MESH_DFD_SRV)
 	BT_MESH_MODEL_DFD_SRV(&dfd_srv),
 #else
@@ -118,7 +118,7 @@ static const struct bt_mesh_model root_models[] = {
 };
 
 static const struct bt_mesh_elem elements[] = {
-	BT_MESH_ELEM(0, root_models, BT_MESH_MODEL_NONE),
+	BT_MESH_ELEM(0, root_models, BT_MESH_MODEL_PTR_LIST()),
 };
 
 static const struct bt_mesh_comp comp = {
