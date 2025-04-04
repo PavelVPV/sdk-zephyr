@@ -27,13 +27,13 @@ BUILD_ASSERT((DFU_UPDATE_INFO_STATUS_MSG_MINLEN +
 
 static void store_state(struct bt_mesh_dfu_srv *srv)
 {
-	bt_mesh_model_data_store(srv->mod, false, NULL, &srv->update,
+	bt_mesh_model_data_store(&srv->mod, false, NULL, &srv->update,
 				 sizeof(srv->update));
 }
 
 static void erase_state(struct bt_mesh_dfu_srv *srv)
 {
-	bt_mesh_model_data_store(srv->mod, false, NULL, NULL, 0);
+	bt_mesh_model_data_store(&srv->mod, false, NULL, NULL, 0);
 }
 
 static void xfer_failed(struct bt_mesh_dfu_srv *srv)
@@ -241,7 +241,7 @@ static void update_status_rsp(struct bt_mesh_dfu_srv *srv,
 		ctx->send_ttl = srv->update.ttl;
 	}
 
-	bt_mesh_model_send(srv->mod, ctx, &buf, send_cb, srv);
+	bt_mesh_model_send(&srv->mod, ctx, &buf, send_cb, srv);
 }
 
 static int handle_get(const struct bt_mesh_model *mod, struct bt_mesh_msg_ctx *ctx,
@@ -442,7 +442,6 @@ static int dfu_srv_init(const struct bt_mesh_model *mod)
 {
 	struct bt_mesh_dfu_srv *srv = mod->rt->user_data;
 
-	srv->mod = mod;
 	srv->update.idx = UPDATE_IDX_NONE;
 
 	if (!srv->cb || !srv->cb->start || !srv->imgs || srv->img_count == 0 ||
@@ -452,18 +451,6 @@ static int dfu_srv_init(const struct bt_mesh_model *mod)
 	}
 
 	return 0;
-}
-
-static const struct bt_mesh_model * dfu_srv_extends(const struct bt_mesh_model *model,
-						    const struct bt_mesh_model *ext_model)
-{
-	struct bt_mesh_dfu_srv *srv = model->rt->user_data;
-
-	if (ext_model == NULL) {
-		return srv->blob.mod;
-	}
-
-	return NULL;
 }
 
 static int dfu_srv_settings_set(const struct bt_mesh_model *mod, const char *name,
@@ -505,7 +492,6 @@ static void dfu_srv_reset(const struct bt_mesh_model *mod)
 
 const struct bt_mesh_model_cb _bt_mesh_dfu_srv_cb = {
 	.init = dfu_srv_init,
-	.extends = dfu_srv_extends,
 	.settings_set = dfu_srv_settings_set,
 	.reset = dfu_srv_reset,
 };

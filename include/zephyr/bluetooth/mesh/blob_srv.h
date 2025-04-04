@@ -34,6 +34,13 @@ struct bt_mesh_blob_srv;
 #define BT_MESH_BLOB_BLOCKS_MAX 1
 #endif
 
+#define BT_MESH_BLOB_SRV_INIT(_srv) \
+	{ \
+		.mod = BT_MESH_MODEL_CB(BT_MESH_MODEL_ID_BLOB_SRV, _bt_mesh_blob_srv_op,      \
+					NULL, &_srv, &_bt_mesh_blob_srv_cb) \
+	}
+
+
 /**
  *
  *  @brief BLOB Transfer Server model composition data entry.
@@ -41,8 +48,7 @@ struct bt_mesh_blob_srv;
  *  @param _srv Pointer to a @ref bt_mesh_blob_srv instance.
  */
 #define BT_MESH_MODEL_BLOB_SRV(_srv)                                           \
-	BT_MESH_MODEL_CB(BT_MESH_MODEL_ID_BLOB_SRV, _bt_mesh_blob_srv_op,      \
-			 NULL, _srv, &_bt_mesh_blob_srv_cb)
+	&(_srv)->mod
 
 /** @brief BLOB Transfer Server model event handlers.
  *
@@ -136,7 +142,7 @@ struct bt_mesh_blob_srv {
 	const struct bt_mesh_blob_io *io;
 	struct k_work_delayable rx_timeout;
 	struct bt_mesh_blob_block block;
-	const struct bt_mesh_model *mod;
+	const struct bt_mesh_model mod;
 	enum bt_mesh_blob_xfer_phase phase;
 
 	struct bt_mesh_blob_srv_state {

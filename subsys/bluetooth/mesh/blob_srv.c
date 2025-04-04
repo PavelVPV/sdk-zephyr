@@ -84,7 +84,7 @@ static void store_state(const struct bt_mesh_blob_srv *srv)
 	uint32_t block_len = DIV_ROUND_UP(block_count_get(srv), 8);
 
 	bt_mesh_model_data_store(
-		srv->mod, false, NULL, &srv->state,
+		&srv->mod, false, NULL, &srv->state,
 		offsetof(struct bt_mesh_blob_srv_state, blocks) + block_len);
 }
 
@@ -94,7 +94,7 @@ static void erase_state(struct bt_mesh_blob_srv *srv)
 		return;
 	}
 
-	bt_mesh_model_data_store(srv->mod, false, NULL, NULL, 0);
+	bt_mesh_model_data_store(&srv->mod, false, NULL, NULL, 0);
 }
 
 static int io_open(struct bt_mesh_blob_srv *srv)
@@ -200,7 +200,7 @@ static void block_report(struct bt_mesh_blob_srv *srv)
 		}
 	}
 
-	(void)bt_mesh_model_send(srv->mod, &ctx, &buf, &report_cb, srv);
+	(void)bt_mesh_model_send(&srv->mod, &ctx, &buf, &report_cb, srv);
 }
 
 static void phase_set(struct bt_mesh_blob_srv *srv,
@@ -346,7 +346,7 @@ static void xfer_status_rsp(struct bt_mesh_blob_srv *srv,
 
 send:
 	ctx->send_ttl = srv->state.ttl;
-	(void)bt_mesh_model_send(srv->mod, ctx, &buf, NULL, NULL);
+	(void)bt_mesh_model_send(&srv->mod, ctx, &buf, NULL, NULL);
 }
 
 static void block_status_rsp(struct bt_mesh_blob_srv *srv,
@@ -411,7 +411,7 @@ static void block_status_rsp(struct bt_mesh_blob_srv *srv,
 		ctx->send_ttl = srv->state.ttl;
 	}
 
-	(void)bt_mesh_model_send(srv->mod, ctx, &buf, NULL, NULL);
+	(void)bt_mesh_model_send(&srv->mod, ctx, &buf, NULL, NULL);
 }
 
 static int handle_xfer_get(const struct bt_mesh_model *mod, struct bt_mesh_msg_ctx *ctx,
@@ -830,7 +830,7 @@ static int handle_info_get(const struct bt_mesh_model *mod, struct bt_mesh_msg_c
 		ctx->send_ttl = srv->state.ttl;
 	}
 
-	(void)bt_mesh_model_send(srv->mod, ctx, &rsp, NULL, NULL);
+	(void)bt_mesh_model_send(&srv->mod, ctx, &rsp, NULL, NULL);
 
 	return 0;
 }
@@ -850,7 +850,6 @@ static int blob_srv_init(const struct bt_mesh_model *mod)
 {
 	struct bt_mesh_blob_srv *srv = mod->rt->user_data;
 
-	srv->mod = mod;
 	srv->state.ttl = BT_MESH_TTL_DEFAULT;
 	srv->block.number = 0xffff;
 	srv->state.xfer.chunk_size = 0xffff;

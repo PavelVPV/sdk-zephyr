@@ -170,6 +170,8 @@ static int cmd_get_comp(const struct shell *sh, size_t argc, char *argv[])
 			    "Got Composition Data for 0x%04x, page: %d:",
 			    bt_mesh_shell_target_ctx.dst, page);
 
+		shell_hexdump(sh, buf.data, buf.len);
+
 		while (bt_mesh_comp_p1_elem_pull(&buf, &p1_elem)) {
 			int i, j;
 

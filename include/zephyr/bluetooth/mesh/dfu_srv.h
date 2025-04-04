@@ -33,10 +33,15 @@ struct bt_mesh_dfu_srv;
  * @param _imgs       List of @ref bt_mesh_dfu_img managed by this Server.
  * @param _img_count  Number of DFU images managed by this Server.
  */
-#define BT_MESH_DFU_SRV_INIT(_handlers, _imgs, _img_count)                     \
+#define BT_MESH_DFU_SRV_INIT(_srv, _handlers, _imgs, _img_count)                     \
 	{                                                                      \
 		.blob = { .cb = &_bt_mesh_dfu_srv_blob_cb }, .cb = _handlers,  \
 		.imgs = _imgs, .img_count = _img_count,                        \
+		.mod = BT_MESH_MODEL_REL_CB(BT_MESH_MODEL_ID_DFU_SRV,          \
+				 _bt_mesh_dfu_srv_op, NULL, &_srv,             \
+				 &_bt_mesh_dfu_srv_cb, \
+				 BT_MESH_MODEL_EXTENDS(&(_srv).blob.mod), \
+				 BT_MESH_MODEL_CORRESPONDS()),                     \
 	}
 
 /**
@@ -47,8 +52,7 @@ struct bt_mesh_dfu_srv;
  */
 #define BT_MESH_MODEL_DFU_SRV(_srv)                                            \
 	BT_MESH_MODEL_BLOB_SRV(&(_srv)->blob),                                  \
-	BT_MESH_MODEL_CB(BT_MESH_MODEL_ID_DFU_SRV, _bt_mesh_dfu_srv_op, NULL,  \
-			 _srv, &_bt_mesh_dfu_srv_cb)
+	&(_srv)->mod
 
 /** @brief Firmware Update Server event callbacks. */
 struct bt_mesh_dfu_srv_cb {
@@ -184,7 +188,7 @@ struct bt_mesh_dfu_srv {
 	size_t img_count;
 
 	/* Runtime state */
-	const struct bt_mesh_model *mod;
+	const struct bt_mesh_model mod;
 	struct {
 		/* Effect of transfer, @see bt_mesh_dfu_effect. */
 		uint8_t effect;
