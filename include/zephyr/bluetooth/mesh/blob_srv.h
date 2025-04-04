@@ -34,8 +34,9 @@ struct bt_mesh_blob_srv;
 #define BT_MESH_BLOB_BLOCKS_MAX 1
 #endif
 
-#define BT_MESH_BLOB_SRV_INIT(_srv) \
+#define BT_MESH_BLOB_SRV_INIT(_srv, _cb) \
 	{ \
+		.cb = _cb, \
 		.mod = BT_MESH_MODEL_CB(BT_MESH_MODEL_ID_BLOB_SRV, _bt_mesh_blob_srv_op,      \
 					NULL, &_srv, &_bt_mesh_blob_srv_cb) \
 	}

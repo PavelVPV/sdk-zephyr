@@ -35,7 +35,8 @@ struct bt_mesh_dfu_srv;
  */
 #define BT_MESH_DFU_SRV_INIT(_srv, _handlers, _imgs, _img_count)                     \
 	{                                                                      \
-		.blob = { .cb = &_bt_mesh_dfu_srv_blob_cb }, .cb = _handlers,  \
+		.blob = BT_MESH_BLOB_SRV_INIT((_srv).blob, &_bt_mesh_dfu_srv_blob_cb), \
+		.cb = _handlers,  \
 		.imgs = _imgs, .img_count = _img_count,                        \
 		.mod = BT_MESH_MODEL_REL_CB(BT_MESH_MODEL_ID_DFU_SRV,          \
 				 _bt_mesh_dfu_srv_op, NULL, &_srv,             \
