@@ -160,8 +160,6 @@ static int cmd_get_comp(const struct shell *sh, size_t argc, char *argv[])
 		NET_BUF_SIMPLE_DEFINE(p1_buf, 32);
 		NET_BUF_SIMPLE_DEFINE(p1_item_buf, 32);
 		struct bt_mesh_comp_p1_elem p1_elem = { ._buf = &p1_buf };
-		struct bt_mesh_comp_p1_model_item mod_item = { ._buf = &p1_item_buf };
-		struct bt_mesh_comp_p1_ext_item ext_item = { 0 };
 		int mod_idx = 1;
 
 		if (!buf.len) {
@@ -178,6 +176,10 @@ static int cmd_get_comp(const struct shell *sh, size_t argc, char *argv[])
 			shell_print(sh, "\tElement #%d description", mod_idx);
 
 			for (i = 0; i < p1_elem.nsig; i++) {
+				struct bt_mesh_comp_p1_model_item mod_item = {
+					._buf = &p1_item_buf
+				};
+
 				if (bt_mesh_comp_p1_item_pull(&p1_elem, &mod_item)) {
 					shell_print(sh, "\t\tSIG Model Item #%d:", i+1);
 					if (mod_item.cor_present) {
@@ -192,7 +194,9 @@ static int cmd_get_comp(const struct shell *sh, size_t argc, char *argv[])
 						    "\t\t\tWith %u Extended Model Item(s)",
 						    mod_item.ext_item_cnt);
 				}
+
 				for (j = 0; j < mod_item.ext_item_cnt; j++) {
+					struct bt_mesh_comp_p1_ext_item ext_item = { 0 };
 					bt_mesh_comp_p1_pull_ext_item(&mod_item,
 								      &ext_item);
 					shell_print(sh,
@@ -215,6 +219,10 @@ static int cmd_get_comp(const struct shell *sh, size_t argc, char *argv[])
 				}
 			}
 			for (i = 0; i < p1_elem.nvnd; i++) {
+				struct bt_mesh_comp_p1_model_item mod_item = {
+					._buf = &p1_item_buf
+				};
+
 				if (bt_mesh_comp_p1_item_pull(&p1_elem, &mod_item)) {
 					shell_print(sh, "\t\tVendor Model Item #%d:", i+1);
 					if (mod_item.cor_present) {
@@ -229,7 +237,9 @@ static int cmd_get_comp(const struct shell *sh, size_t argc, char *argv[])
 						    "\t\t\tWith %u Extended Model Item(s)",
 						    mod_item.ext_item_cnt);
 				}
+
 				for (j = 0; j < mod_item.ext_item_cnt; j++) {
+					struct bt_mesh_comp_p1_ext_item ext_item = { 0 };
 					bt_mesh_comp_p1_pull_ext_item(&mod_item,
 								      &ext_item);
 					shell_print(sh,

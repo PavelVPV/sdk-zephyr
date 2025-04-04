@@ -417,56 +417,64 @@ int bt_mesh_comp_data_get_page_0(struct net_buf_simple *buf, size_t offset)
 	return 0;
 }
 
-static uint32_t extended_models_count(const struct bt_mesh_model *base_mod, bool *format)
+static uint32_t extended_models_count(const struct bt_mesh_model *mod, bool *format)
 {
 #if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS)
-	if (base_mod->extends == NULL || base_mod->extends_cnt == 0) {
+	if (mod->extends == NULL || mod->extends_cnt == 0) {
+		*format = false;
 		return 0;
 	}
 
-	for (size_t i = 0; i < base_mod->extends_cnt; i++) {
-		const struct bt_mesh_model *extending_mod = base_mod->extends[i];
-		int32_t elem_offset = base_mod->rt->elem_idx - extending_mod->rt->elem_idx;
+	for (size_t i = 0; i < mod->extends_cnt; i++) {
+		const struct bt_mesh_model *base_mod = mod->extends[i];
+		int32_t elem_offset = mod->rt->elem_idx - base_mod->rt->elem_idx;
 
-		if (elem_offset > 3 || elem_offset < -4 ||
-		    extending_mod->rt->mod_idx > 31) {
+		/* See Table 4.9, MshPRTv1.1 */
+		if (elem_offset > 3 || elem_offset < -4 || base_mod->rt->mod_idx > 31) {
 			*format = true;
 		}
 	}
 #endif
 
-	return base_mod->extends_cnt;
+	return mod->extends_cnt;
+}
+
+static bool has_corresponding_model(const struct bt_mesh_model *mod)
+{
+	return mod->rt->cor_group_id != 0;
 }
 
 static void prep_model_item_header(struct net_buf_simple *buf, const struct bt_mesh_model *mod,
-				   bool format, uint32_t ext_mod_cnt, size_t *offset)
+				   bool format_long, uint32_t ext_mod_cnt, size_t *offset)
 {
 #if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS) && defined(CONFIG_BT_MESH_COMP_PAGE_1)
-	bool cor_present = mod->rt->cor_group_id != 0;
+	/* Zero Corresponding Group ID means that the model doesn't have a corresponding model. */
+	bool cor_present = has_corresponding_model(mod);
 	uint8_t mod_elem_info = 0;
-
-	if (format) {
-		mod_elem_info |= BIT(1);
-	}
 
 	if (cor_present) {
 		mod_elem_info |= BIT(0);
 	}
 
+	if (format_long) {
+		mod_elem_info |= BIT(1);
+	}
+
 	mod_elem_info |= (ext_mod_cnt & 0xFF) << 2;
 	data_buf_add_u8_offset(buf, mod_elem_info, offset);
 
-//	LOG_WRN("mod[%d:%d]: cp: %d, cid: %d, ext_mod_cnt: %d", mod->rt->elem_idx, mod->rt->mod_idx,
-//		cor_present, mod->rt->cor_group_id, ext_mod_cnt);
+	LOG_DBG("mod[%d:%d]: cor_present: %d, format: %s, ext_mod_cnt: %d", mod->rt->elem_idx,
+		mod->rt->mod_idx, cor_present, format_long ? "long" : "short", ext_mod_cnt);
 
 	if (cor_present) {
+		/* Global Corresponding Group ID index starts from 1, thus - decrement. */
 		data_buf_add_u8_offset(buf, mod->rt->cor_group_id - 1, offset);
 	}
 #endif
 }
 
 static void add_items_to_page(struct net_buf_simple *buf, const struct bt_mesh_model *mod,
-			      bool format, size_t *offset)
+			      bool format_long, size_t *offset)
 {
 #if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS)
 	if (mod->extends == NULL || mod->extends_cnt == 0) {
@@ -474,28 +482,35 @@ static void add_items_to_page(struct net_buf_simple *buf, const struct bt_mesh_m
 	}
 
 	for (size_t i = 0; i < mod->extends_cnt; i++) {
-		const struct bt_mesh_model *extending_mod = mod->extends[i];
-		int32_t elem_offset = mod->rt->elem_idx - extending_mod->rt->elem_idx;
+		const struct bt_mesh_model *base_mod = mod->extends[i];
+		int32_t elem_offset = mod->rt->elem_idx - base_mod->rt->elem_idx;
 
-//		LOG_WRN("%s: elem_offset: %d, mod_idx: %d", __func__, elem_offset,
-//			extending_mod->rt->mod_idx);
+		if (!format_long) {
+			uint8_t model_item_index = (base_mod->rt->mod_idx & 0x1F) << 3;
 
-		if (!format) {
 			if (elem_offset < 0) {
+				/* See Table 4.10, MshPRTv1.1 */
 				elem_offset += 8;
 			}
 
-			data_buf_add_u8_offset(buf, (uint8_t) elem_offset |
-					       (extending_mod->rt->mod_idx << 3),
+			LOG_DBG("mod[%d:%d]: short: elem_offset: %d, mod_idx: %d, index: %d",
+				mod->rt->elem_idx, mod->rt->mod_idx, elem_offset,
+				base_mod->rt->mod_idx, model_item_index);
+
+			data_buf_add_u8_offset(buf, (uint8_t) elem_offset | model_item_index,
 					       offset);
 		} else {
 			if (elem_offset < 0) {
+				/* See Table 4.11, MshPRTv1.1 */
 				elem_offset += 256;
 			}
 
+			LOG_DBG("mod[%d:%d]: long: elem_offset: %d, mod_idx: %d, index: %d",
+				mod->rt->elem_idx, mod->rt->mod_idx, elem_offset,
+				base_mod->rt->mod_idx, base_mod->rt->mod_idx);
+
 			data_buf_add_u8_offset(buf, (uint8_t) elem_offset, offset);
-			data_buf_add_u8_offset(buf, extending_mod->rt->mod_idx,
-					       offset);
+			data_buf_add_u8_offset(buf, base_mod->rt->mod_idx, offset);
 		}
 	}
 #endif
@@ -503,6 +518,7 @@ static void add_items_to_page(struct net_buf_simple *buf, const struct bt_mesh_m
 
 static size_t page1_elem_size(const struct bt_mesh_elem *elem)
 {
+	/* See Table 4.7, MshPRTv1.1 */
 	size_t temp_size = 2;
 
 #if defined(CONFIG_BT_MESH_MODEL_EXTENSIONS) && defined(CONFIG_BT_MESH_COMP_PAGE_1)
@@ -523,13 +539,13 @@ static size_t page1_elem_size(const struct bt_mesh_elem *elem)
 	for (int j = 0; j < ARRAY_SIZE(model_types); j++) {
 		for (int k = 0; k < model_types[j].count; k++) {
 			const struct bt_mesh_model *mod = model_types[j].models[k];
-			bool cor_present = mod->rt->cor_group_id != 0;
-			uint8_t ext_mod_cnt = 0;
-			bool fmt_long = false;
+			uint8_t ext_mod_cnt;
+			bool fmt_long;
 
 			ext_mod_cnt = extended_models_count(mod, &fmt_long);
 
-			temp_size += cor_present ? 2 : 1;
+			/* See Table 4.8, MshPRTv1.1 */
+			temp_size += has_corresponding_model(mod) ? 2 : 1;
 			temp_size += fmt_long ? ext_mod_cnt * 2 : ext_mod_cnt;
 		}
 	}
@@ -589,16 +605,18 @@ static int bt_mesh_comp_data_get_page_1(struct net_buf_simple *buf, size_t offse
 
 		for (int j = 0; j < ARRAY_SIZE(model_types); j++) {
 			for (int k = 0; k < model_types[j].count; k++) {
-				const struct bt_mesh_model *base_mod = model_types[j].models[k];
-				uint8_t ext_mod_cnt = 0;
-				bool fmt_long = false;
+				const struct bt_mesh_model *mod = model_types[j].models[k];
+				uint8_t ext_mod_cnt;
+				bool fmt_long;
 
-				ext_mod_cnt = extended_models_count(base_mod, &fmt_long);
+				ext_mod_cnt = extended_models_count(mod, &fmt_long);
+				LOG_DBG("mod[%d:%d]: ext_mod_cnt: %d, fmt: %s", mod->rt->elem_idx,
+					mod->rt->mod_idx, ext_mod_cnt, fmt_long ? "long" : "short");
 
-				prep_model_item_header(buf, base_mod, fmt_long, ext_mod_cnt, &offset);
+				prep_model_item_header(buf, mod, fmt_long, ext_mod_cnt, &offset);
 
 				if (ext_mod_cnt != 0) {
-					add_items_to_page(buf, base_mod, fmt_long, &offset);
+					add_items_to_page(buf, mod, fmt_long, &offset);
 				}
 			}
 		}
@@ -1017,9 +1035,9 @@ static void corresponding_group_id_set(const struct bt_mesh_model *mod)
 		 * If so, use that group for the base model.
 		 * If not, use new group id.
 		 */
-		if (corresponding_mod->rt->cor_group_id != 0) {
+		if (has_corresponding_model(corresponding_mod)) {
 			mod->rt->cor_group_id = corresponding_mod->rt->cor_group_id;
-		} else if (mod->rt->cor_group_id != 0) {
+		} else if (has_corresponding_model(mod)) {
 			corresponding_mod->rt->cor_group_id = mod->rt->cor_group_id;
 		} else {
 			mod->rt->cor_group_id = ++cor_group_id;

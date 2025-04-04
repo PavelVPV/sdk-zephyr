@@ -36,8 +36,9 @@ LOG_MODULE_REGISTER(bt_mesh_cfg_cli);
 #define COR_PRESENT(hdr) ((hdr) & BIT(0))
 #define FMT(hdr) ((hdr) & BIT(1))
 #define EXT_ITEM_CNT(hdr) ((hdr) >> 2)
-#define OFFSET(item) (item & (uint8_t)BIT_MASK(5))
-#define IDX(item) (item >> 3)
+//#define OFFSET(item) (item & (uint8_t)BIT_MASK(3))
+#define OFFSET(item) ((item) & 0x7)
+#define IDX(item) ((item) >> 3)
 
 struct comp_data {
 	uint8_t *page;
