@@ -636,6 +636,15 @@ void bt_gatt_cb_register(struct bt_gatt_cb *cb);
  */
 int bt_gatt_authorization_cb_register(const struct bt_gatt_authorization_cb *cb);
 
+struct bt_gatt_notification_cb {
+	/** Notification passed to Controller. */
+	bool (*queued)(void);
+	/** Notification has been sent. */
+	bool (*sent)(void);
+};
+
+int bt_gatt_notification_cb_register(const struct bt_gatt_notification_cb *cb);
+
 /** @brief Register GATT service.
  *
  *  To register a GATT service, applications can make use of macros such as

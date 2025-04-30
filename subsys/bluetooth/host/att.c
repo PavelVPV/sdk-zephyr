@@ -135,6 +135,8 @@ static uint16_t bt_att_mtu(struct bt_att_chan *chan)
  */
 const static struct bt_gatt_authorization_cb *authorization_cb;
 
+const static struct bt_gatt_notification_cb *notification_cb;
+
 /* ATT connection specific data */
 struct bt_att {
 	struct bt_conn		*conn;
@@ -315,6 +317,18 @@ static void att_sent(void *user_data)
 	bt_att_sent(chan);
 }
 
+static void notification_sent_cb(struct bt_conn *conn, void *user_data, int err)
+{
+	ARG_UNUSED(conn);
+	ARG_UNUSED(user_data);
+	ARG_UNUSED(err);
+
+	if (IS_ENABLED(CONFIG_BT_GATT_NOTIFICATIONS_CB) &&
+	    notification_cb != NULL) {
+		notification_cb->sent();
+	}
+}
+
 static void chan_sent_cb(struct bt_conn *conn, void *user_data, int err)
 {
 	struct net_buf *nb = user_data;
@@ -415,7 +429,10 @@ static int chan_send(struct bt_att_chan *chan, struct net_buf *buf)
 
 	data->att_chan = chan;
 
-	if (IS_ENABLED(CONFIG_BT_ATT_SENT_CB_AFTER_TX)) {
+	if (IS_ENABLED(CONFIG_BT_GATT_NOTIFICATIONS_CB) &&
+	    att_op_get_type(hdr->code) == ATT_NOTIFICATION) {
+		err = bt_l2cap_send_pdu(&chan->chan, buf, notification_sent_cb, NULL);
+	} else if (IS_ENABLED(CONFIG_BT_ATT_SENT_CB_AFTER_TX)) {
 		err = bt_l2cap_send_pdu(&chan->chan, buf, chan_sent_cb, net_buf_ref(buf));
 		if (err) {
 			net_buf_unref(buf);
@@ -693,6 +710,11 @@ static void att_on_sent_cb(struct bt_att_tx_meta_data *meta)
 		return;
 	case ATT_COMMAND:
 	case ATT_NOTIFICATION:
+		if (IS_ENABLED(CONFIG_BT_GATT_NOTIFICATIONS_CB) &&
+		    notification_cb != NULL) {
+			notification_cb->queued();
+		}
+
 		chan_req_notif_sent(meta);
 		return;
 	default:
@@ -4186,6 +4208,22 @@ int bt_gatt_authorization_cb_register(const struct bt_gatt_authorization_cb *cb)
 	}
 
 	authorization_cb = cb;
+
+	return 0;
+}
+
+int bt_gatt_notification_cb_register(const struct bt_gatt_notification_cb *cb)
+{
+	if (!cb) {
+		notification_cb = NULL;
+		return 0;
+	}
+
+	if (notification_cb) {
+		return -EALREADY;
+	}
+
+	notification_cb = cb;
 
 	return 0;
 }
