@@ -587,6 +587,9 @@ bool bt_mesh_is_provisioned(void);
 int bt_mesh_init(const struct bt_mesh_prov *prov,
 		 const struct bt_mesh_comp *comp);
 
+int bt_mesh_comp128_register(const struct bt_mesh_comp *comp);
+bool bt_mesh_new_comp_present(void);
+
 /** @brief Reset the state of the local Mesh node.
  *
  *  Resets the state of the node, which means that it needs to be

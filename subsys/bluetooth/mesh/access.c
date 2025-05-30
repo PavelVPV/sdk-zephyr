@@ -58,6 +58,7 @@ struct comp_foreach_model_arg {
 };
 
 static const struct bt_mesh_comp *dev_comp;
+static const struct bt_mesh_comp *dev_comp128;
 static const struct bt_mesh_comp2 *dev_comp2;
 static uint16_t dev_primary_addr;
 static void (*msg_cb)(uint32_t opcode, struct bt_mesh_msg_ctx *ctx, struct net_buf_simple *buf);
@@ -375,13 +376,17 @@ static int comp_add_elem(struct net_buf_simple *buf, const struct bt_mesh_elem *
 	return 0;
 }
 
-int bt_mesh_comp_data_get_page_0(struct net_buf_simple *buf, size_t offset)
+int bt_mesh_comp_data_get_page_0(int page, struct net_buf_simple *buf, size_t offset)
 {
 	uint16_t feat = 0U;
 	const struct bt_mesh_comp *comp;
 	int i;
 
-	comp = bt_mesh_comp_get();
+	if (dev_comp128 != NULL && page >= 128) {
+		comp = dev_comp128;
+	} else {
+		comp = bt_mesh_comp_get();
+	}
 
 	if (IS_ENABLED(CONFIG_BT_MESH_RELAY)) {
 		feat |= BT_MESH_FEAT_RELAY;
@@ -554,13 +559,17 @@ static size_t page1_elem_size(const struct bt_mesh_elem *elem)
 	return temp_size;
 }
 
-static int bt_mesh_comp_data_get_page_1(struct net_buf_simple *buf, size_t offset)
+static int bt_mesh_comp_data_get_page_1(int page, struct net_buf_simple *buf, size_t offset)
 {
 	const struct bt_mesh_comp *comp;
 
 	// TODO: I need to calculate max CDP size and alloc
 
-	comp = bt_mesh_comp_get();
+	if (dev_comp128 != NULL && page >= 128) {
+		comp = dev_comp128;
+	} else {
+		comp = bt_mesh_comp_get();
+	}
 
 	for (int i = 0; i < comp->elem_count; i++) {
 		const struct bt_mesh_elem *elem = &comp->elem[i];
@@ -1144,6 +1153,25 @@ int bt_mesh_comp_register(const struct bt_mesh_comp *comp)
 	}
 
 	return err;
+}
+
+int bt_mesh_comp128_register(const struct bt_mesh_comp *comp)
+{
+	/* There must be at least one element */
+	if (!comp || !comp->elem_count) {
+		return -EINVAL;
+	}
+
+	dev_comp128 = comp;
+
+	// TBA
+
+	return 0;
+}
+
+bool bt_mesh_new_comp_present(void)
+{
+	return dev_comp128 != NULL || atomic_test_bit(bt_mesh.flags, BT_MESH_COMP_DIRTY);
 }
 
 int bt_mesh_comp2_register(const struct bt_mesh_comp2 *comp2)
@@ -2221,9 +2249,9 @@ void bt_mesh_model_pub_store(const struct bt_mesh_model *mod)
 int bt_mesh_comp_data_get_page(struct net_buf_simple *buf, size_t page, size_t offset)
 {
 	if (page == 0 || page == 128) {
-		return bt_mesh_comp_data_get_page_0(buf, offset);
+		return bt_mesh_comp_data_get_page_0(page, buf, offset);
 	} else if (IS_ENABLED(CONFIG_BT_MESH_COMP_PAGE_1) && (page == 1 || page == 129)) {
-		return bt_mesh_comp_data_get_page_1(buf, offset);
+		return bt_mesh_comp_data_get_page_1(page, buf, offset);
 	} else if (IS_ENABLED(CONFIG_BT_MESH_COMP_PAGE_2) && (page == 2 || page == 130)) {
 		return bt_mesh_comp_data_get_page_2(buf, offset);
 	}
@@ -2535,6 +2563,15 @@ void bt_mesh_comp_data_pending_clear(void)
 void bt_mesh_comp_data_clear(void)
 {
 	bt_mesh_settings_store_schedule(BT_MESH_SETTINGS_COMP_PENDING);
+
+	if (dev_comp128) {
+		/* FIXME: Not all data is erased, e.g. models publication */
+
+		bt_mesh_model_reset();
+		bt_mesh_comp_register(dev_comp128);
+
+		dev_comp128 = NULL;
+	}
 }
 
 int bt_mesh_models_metadata_change_prepare(void)

@@ -875,7 +875,7 @@ static int handle_link_open(const struct bt_mesh_model *mod, struct bt_mesh_msg_
 		}
 
 		if (refresh == BT_MESH_RPR_NODE_REFRESH_COMPOSITION &&
-		    !atomic_test_bit(bt_mesh.flags, BT_MESH_COMP_DIRTY)) {
+		    !bt_mesh_new_comp_present()) {
 			LOG_WRN("Composition data page 128 is equal to page 0");
 			status = BT_MESH_RPR_ERR_LINK_CANNOT_OPEN;
 			goto rsp;
@@ -1311,7 +1311,7 @@ static struct bt_le_scan_cb scan_cb = {
 
 static int rpr_srv_init(const struct bt_mesh_model *mod)
 {
-	if (mod->rt->elem_idx || srv.mod) {
+	if (mod->rt->elem_idx) {
 		LOG_ERR("Remote provisioning server must be initialized "
 			"on first element");
 		return -EINVAL;

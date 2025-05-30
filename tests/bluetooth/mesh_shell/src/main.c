@@ -67,10 +67,10 @@ static const struct bt_mesh_model* root_models[] = {
 #endif
 #endif /* CONFIG_BT_MESH_DFD_SRV */
 #if defined(CONFIG_BT_MESH_SHELL_RPR_CLI)
-	BT_MESH_MODEL_RPR_CLI(&bt_mesh_shell_rpr_cli),
+	BT_MESH_MODEL_DECLARE(BT_MESH_MODEL_RPR_CLI(&bt_mesh_shell_rpr_cli)),
 #endif
 #if defined(CONFIG_BT_MESH_RPR_SRV)
-	BT_MESH_MODEL_RPR_SRV,
+	BT_MESH_MODEL_DECLARE(BT_MESH_MODEL_RPR_SRV),
 #endif
 
 #if defined(CONFIG_BT_MESH_SAR_CFG_SRV)
