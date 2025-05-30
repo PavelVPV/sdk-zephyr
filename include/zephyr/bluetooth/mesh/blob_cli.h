@@ -24,6 +24,13 @@ extern "C" {
 
 struct bt_mesh_blob_cli;
 
+#define BT_MESH_BLOB_CLI_INIT(_cli, _cb) \
+	{ \
+		.cb = _cb, \
+		.mod = BT_MESH_MODEL_CB(BT_MESH_MODEL_ID_BLOB_CLI, _bt_mesh_blob_cli_op, \
+					NULL, &(_cli), &_bt_mesh_blob_cli_cb), \
+	}
+
 /**
  *
  * @brief BLOB Transfer Client model Composition Data entry.
@@ -31,8 +38,7 @@ struct bt_mesh_blob_cli;
  * @param _cli Pointer to a @ref bt_mesh_blob_cli instance.
  */
 #define BT_MESH_MODEL_BLOB_CLI(_cli)                                           \
-	BT_MESH_MODEL_CB(BT_MESH_MODEL_ID_BLOB_CLI, _bt_mesh_blob_cli_op,      \
-			 NULL, _cli, &_bt_mesh_blob_cli_cb)
+	&(_cli)->mod
 
 /** Target node's Pull mode (Pull BLOB Transfer Mode) context used
  *  while sending chunks to the Target node.
@@ -295,7 +301,7 @@ struct bt_mesh_blob_cli {
 	const struct bt_mesh_blob_cli_cb *cb;
 
 	/* Runtime state */
-	const struct bt_mesh_model *mod;
+	const struct bt_mesh_model mod;
 
 	struct {
 		struct bt_mesh_blob_target *target;

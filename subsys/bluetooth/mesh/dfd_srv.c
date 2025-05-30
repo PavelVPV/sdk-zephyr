@@ -109,7 +109,7 @@ static void receivers_status_rsp(struct bt_mesh_dfd_srv *srv,
 	net_buf_simple_add_u8(&buf, status);
 	net_buf_simple_add_le16(&buf, srv->target_cnt);
 
-	bt_mesh_model_send(srv->mod, ctx, &buf, NULL, NULL);
+	bt_mesh_model_send(&srv->mod, ctx, &buf, NULL, NULL);
 }
 
 static int handle_receivers_add(const struct bt_mesh_model *mod, struct bt_mesh_msg_ctx *ctx,
@@ -191,7 +191,7 @@ static int handle_receivers_get(const struct bt_mesh_model *mod, struct bt_mesh_
 		net_buf_simple_add_u8(&rsp, t->img_idx);
 	}
 
-	bt_mesh_model_send(srv->mod, ctx, &rsp, NULL, NULL);
+	bt_mesh_model_send(&srv->mod, ctx, &rsp, NULL, NULL);
 
 	return 0;
 }
@@ -253,7 +253,7 @@ static void status_rsp(struct bt_mesh_dfd_srv *srv, struct bt_mesh_msg_ctx *ctx,
 	net_buf_simple_add_u8(&rsp, srv->phase);
 
 	if (srv->phase == BT_MESH_DFD_PHASE_IDLE || !srv->dfu.xfer.slot) {
-		bt_mesh_model_send(srv->mod, ctx, &rsp, NULL, NULL);
+		bt_mesh_model_send(&srv->mod, ctx, &rsp, NULL, NULL);
 		return;
 	}
 
@@ -265,7 +265,7 @@ static void status_rsp(struct bt_mesh_dfd_srv *srv, struct bt_mesh_msg_ctx *ctx,
 				     ((srv->apply & BIT_MASK(1)) << 2)));
 	net_buf_simple_add_le16(&rsp, srv->slot_idx);
 
-	bt_mesh_model_send(srv->mod, ctx, &rsp, NULL, NULL);
+	bt_mesh_model_send(&srv->mod, ctx, &rsp, NULL, NULL);
 }
 
 static int handle_get(const struct bt_mesh_model *mod, struct bt_mesh_msg_ctx *ctx,
@@ -355,7 +355,7 @@ static void upload_status_rsp_with_progress(struct bt_mesh_dfd_srv *srv,
 
 	if (srv->upload.phase == BT_MESH_DFD_UPLOAD_PHASE_IDLE ||
 	    !srv->upload.slot) {
-		bt_mesh_model_send(srv->mod, ctx, &rsp, NULL, NULL);
+		bt_mesh_model_send(&srv->mod, ctx, &rsp, NULL, NULL);
 		return;
 	}
 
@@ -372,7 +372,7 @@ static void upload_status_rsp_with_progress(struct bt_mesh_dfd_srv *srv,
 				       srv->upload.slot->fwid_len);
 	}
 
-	bt_mesh_model_send(srv->mod, ctx, &rsp, NULL, NULL);
+	bt_mesh_model_send(&srv->mod, ctx, &rsp, NULL, NULL);
 }
 
 static void upload_status_rsp(struct bt_mesh_dfd_srv *srv,
@@ -687,7 +687,7 @@ static void fw_status_rsp(struct bt_mesh_dfd_srv *srv,
 		net_buf_simple_add_mem(&rsp, fwid, fwid_len);
 	}
 
-	bt_mesh_model_send(srv->mod, ctx, &rsp, NULL, NULL);
+	bt_mesh_model_send(&srv->mod, ctx, &rsp, NULL, NULL);
 }
 
 static int handle_fw_get(const struct bt_mesh_model *mod, struct bt_mesh_msg_ctx *ctx,
@@ -927,21 +927,7 @@ static int dfd_srv_init(const struct bt_mesh_model *mod)
 {
 	struct bt_mesh_dfd_srv *srv = mod->rt->user_data;
 
-	srv->mod = mod;
-
 	return 0;
-}
-
-static const struct bt_mesh_model * dfd_srv_extends(const struct bt_mesh_model *model,
-						    const struct bt_mesh_model *ext_model)
-{
-	struct bt_mesh_dfd_srv *srv = model->rt->user_data;
-
-	if (ext_model == NULL) {
-		return srv->upload.blob.mod;
-	}
-
-	return NULL;
 }
 
 static void dfd_srv_reset(const struct bt_mesh_model *mod)
@@ -960,7 +946,6 @@ static void dfd_srv_reset(const struct bt_mesh_model *mod)
 
 const struct bt_mesh_model_cb _bt_mesh_dfd_srv_cb = {
 	.init = dfd_srv_init,
-	.extends = dfd_srv_extends,
 	.reset = dfd_srv_reset,
 };
 

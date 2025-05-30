@@ -57,7 +57,8 @@ const struct bt_mesh_dfu_cli_cb dfu_cli_cb = {
 	.confirmed = dfu_cli_confirmed,
 };
 
-struct bt_mesh_dfu_cli bt_mesh_shell_dfu_cli = BT_MESH_DFU_CLI_INIT(&dfu_cli_cb);
+struct bt_mesh_dfu_cli bt_mesh_shell_dfu_cli = BT_MESH_DFU_CLI_INIT(bt_mesh_shell_dfu_cli,
+								    &dfu_cli_cb);
 
 #endif /* CONFIG_BT_MESH_SHELL_DFU_CLI */
 
@@ -128,7 +129,7 @@ static const struct bt_mesh_dfu_srv_cb dfu_handlers = {
 };
 
 struct bt_mesh_dfu_srv bt_mesh_shell_dfu_srv =
-	BT_MESH_DFU_SRV_INIT(&dfu_handlers, dfu_imgs, ARRAY_SIZE(dfu_imgs));
+	BT_MESH_DFU_SRV_INIT(bt_mesh_shell_dfu_srv, &dfu_handlers, dfu_imgs, ARRAY_SIZE(dfu_imgs));
 
 #endif /* CONFIG_BT_MESH_SHELL_DFU_SRV */
 

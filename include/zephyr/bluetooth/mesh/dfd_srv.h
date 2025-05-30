@@ -71,13 +71,19 @@ struct bt_mesh_dfd_srv;
  *
  *  @param[in] _cb Pointer to a @ref bt_mesh_dfd_srv_cb instance.
  */
-#define BT_MESH_DFD_SRV_INIT(_cb)                                              \
-	{                                                                      \
-		.cb = _cb,                                                     \
-		.dfu = BT_MESH_DFU_CLI_INIT(&_bt_mesh_dfd_srv_dfu_cb),         \
-		.upload = {                                                    \
-			.blob = { .cb = &_bt_mesh_dfd_srv_blob_cb },           \
-		},                                                             \
+#define BT_MESH_DFD_SRV_INIT(_srv, _cb)                                                            \
+	{                                                                                          \
+		.cb = _cb,                                                                         \
+		.dfu = BT_MESH_DFU_CLI_INIT((_srv).dfu, &_bt_mesh_dfd_srv_dfu_cb),                 \
+		.upload = {                                                                        \
+			.blob = BT_MESH_BLOB_SRV_INIT((_srv).upload.blob,                          \
+						      &_bt_mesh_dfd_srv_blob_cb),                  \
+		},                                                                                 \
+		.mod = BT_MESH_MODEL_REL_CB(BT_MESH_MODEL_ID_DFD_SRV, _bt_mesh_dfd_srv_op, NULL,   \
+					    &(_srv), &_bt_mesh_dfd_srv_cb,                         \
+					    BT_MESH_MODEL_EXTENDS(&(_srv).upload.blob.mod),        \
+					    BT_MESH_MODEL_CORRESPONDS(&(_srv).dfu.mod,             \
+								      &(_srv).dfu.blob.mod)),      \
 	}
 
 /**
@@ -89,8 +95,7 @@ struct bt_mesh_dfd_srv;
 #define BT_MESH_MODEL_DFD_SRV(_srv)                                            \
 	BT_MESH_MODEL_DFU_CLI(&(_srv)->dfu),                                   \
 	BT_MESH_MODEL_BLOB_SRV(&(_srv)->upload.blob),                          \
-	BT_MESH_MODEL_CB(BT_MESH_MODEL_ID_DFD_SRV, _bt_mesh_dfd_srv_op, NULL,  \
-			 _srv, &_bt_mesh_dfd_srv_cb)
+	&(_srv)->mod
 
 /** Firmware Distribution Server callbacks: */
 struct bt_mesh_dfd_srv_cb {
@@ -210,7 +215,7 @@ struct bt_mesh_dfd_srv_cb {
 /** Firmware Distribution Server instance. */
 struct bt_mesh_dfd_srv {
 	const struct bt_mesh_dfd_srv_cb *cb;
-	const struct bt_mesh_model *mod;
+	const struct bt_mesh_model mod;
 	struct bt_mesh_dfu_cli dfu;
 	struct bt_mesh_dfu_target targets[CONFIG_BT_MESH_DFD_SRV_TARGETS_MAX];
 	struct bt_mesh_blob_target_pull pull_ctxs[CONFIG_BT_MESH_DFD_SRV_TARGETS_MAX];

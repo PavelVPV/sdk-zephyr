@@ -33,10 +33,14 @@ struct bt_mesh_dfu_cli;
  *
  *  @param _handlers Handler callback structure.
  */
-#define BT_MESH_DFU_CLI_INIT(_handlers)                                        \
-	{                                                                      \
-		.cb = _handlers,                                               \
-		.blob = { .cb = &_bt_mesh_dfu_cli_blob_handlers },             \
+#define BT_MESH_DFU_CLI_INIT(_cli, _handlers)                                                      \
+	{                                                                                          \
+		.cb = _handlers,                                                                   \
+		.blob = BT_MESH_BLOB_CLI_INIT((_cli).blob, &_bt_mesh_dfu_cli_blob_handlers),       \
+		.mod = BT_MESH_MODEL_REL_CB(BT_MESH_MODEL_ID_DFU_CLI, _bt_mesh_dfu_cli_op, NULL,   \
+					    &(_cli), &_bt_mesh_dfu_cli_cb,                         \
+					    BT_MESH_MODEL_EXTENDS(&(_cli).blob.mod),               \
+					    BT_MESH_MODEL_CORRESPONDS())                           \
 	}
 
 /**
@@ -47,8 +51,7 @@ struct bt_mesh_dfu_cli;
  */
 #define BT_MESH_MODEL_DFU_CLI(_cli)                                            \
 	BT_MESH_MODEL_BLOB_CLI(&(_cli)->blob),                                 \
-	BT_MESH_MODEL_CB(BT_MESH_MODEL_ID_DFU_CLI, _bt_mesh_dfu_cli_op, NULL,  \
-			 _cli, &_bt_mesh_dfu_cli_cb)
+	&(_cli)->mod
 
 /** DFU Target node. */
 struct bt_mesh_dfu_target {
@@ -190,7 +193,7 @@ struct bt_mesh_dfu_cli {
 	/* runtime state */
 
 	uint32_t op;
-	const struct bt_mesh_model *mod;
+	const struct bt_mesh_model mod;
 
 	struct {
 		const struct bt_mesh_dfu_slot *slot;

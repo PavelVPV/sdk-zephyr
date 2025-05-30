@@ -589,7 +589,7 @@ static int tx(struct bt_mesh_blob_cli *cli, uint16_t addr,
 	};
 	int err;
 
-	err = bt_mesh_model_send(cli->mod, &ctx, buf, &end_cb, cli);
+	err = bt_mesh_model_send(&cli->mod, &ctx, buf, &end_cb, cli);
 	if (err) {
 		LOG_ERR("Send err: %d", err);
 		send_end(err, cli);
@@ -1460,8 +1460,6 @@ const struct bt_mesh_model_op _bt_mesh_blob_cli_op[] = {
 static int blob_cli_init(const struct bt_mesh_model *mod)
 {
 	struct bt_mesh_blob_cli *cli = mod->rt->user_data;
-
-	cli->mod = mod;
 
 	bt_mesh_blob_cli_set_chunk_interval_ms(cli, CONFIG_BT_MESH_TX_BLOB_CHUNK_SEND_INTERVAL);
 	cli->tx.cli_timestamp = 0ll;
