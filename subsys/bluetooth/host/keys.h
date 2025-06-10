@@ -31,8 +31,9 @@ enum {
 	BT_KEYS_AUTHENTICATED   = BIT(0),
 	BT_KEYS_DEBUG           = BIT(1),
 	/* Bit 2 and 3 might accidentally exist in old stored keys */
-	BT_KEYS_SC              = BIT(4),
-	BT_KEYS_OOB             = BIT(5),
+	BT_KEYS_SC = BIT(4),
+	BT_KEYS_OOB = BIT(5),
+	BT_KEYS_ID_CONFLICT = BIT(6),
 };
 
 struct bt_ltk {
