@@ -24,6 +24,7 @@ int bt_mesh_dfu_metadata_decode(struct net_buf_simple *buf,
 	metadata->fw_ver.revision = net_buf_simple_pull_le16(buf);
 	metadata->fw_ver.build_num = net_buf_simple_pull_le32(buf);
 	metadata->fw_size = net_buf_simple_pull_le24(buf);
+	metadata->cdp_size = net_buf_simple_pull_le16(buf);
 	metadata->fw_core_type = net_buf_simple_pull_u8(buf);
 
 	if (metadata->fw_core_type & BT_MESH_DFU_FW_CORE_TYPE_APP) {
@@ -60,6 +61,7 @@ int bt_mesh_dfu_metadata_encode(const struct bt_mesh_dfu_metadata *metadata,
 	net_buf_simple_add_le16(buf, metadata->fw_ver.revision);
 	net_buf_simple_add_le32(buf, metadata->fw_ver.build_num);
 	net_buf_simple_add_le24(buf, metadata->fw_size);
+	net_buf_simple_add_le16(buf, metadata->cdp_size);
 	net_buf_simple_add_u8(buf, metadata->fw_core_type);
 	net_buf_simple_add_le32(buf, metadata->comp_hash);
 	net_buf_simple_add_le16(buf, metadata->elems);

@@ -65,7 +65,7 @@ static int dev_comp_data_get(const struct bt_mesh_model *model,
 
 	net_buf_simple_add_u8(&sdu, page);
 
-	if (atomic_test_bit(bt_mesh.flags, BT_MESH_COMP_DIRTY) && page < 128) {
+	if (atomic_test_bit(bt_mesh.flags, BT_MESH_COMP_DIRTY) && page > 128) {
 		sdu.size -= BT_MESH_MIC_SHORT;
 		err = bt_mesh_comp_read(&sdu, page);
 		sdu.size += BT_MESH_MIC_SHORT;

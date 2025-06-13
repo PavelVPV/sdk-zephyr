@@ -588,7 +588,7 @@ int bt_mesh_init(const struct bt_mesh_prov *prov,
 		 const struct bt_mesh_comp *comp);
 
 int bt_mesh_comp128_register(const struct bt_mesh_comp *comp);
-bool bt_mesh_new_comp_present(void);
+bool bt_mesh_new_comp_present(int page);
 
 /** @brief Reset the state of the local Mesh node.
  *

@@ -1169,9 +1169,15 @@ int bt_mesh_comp128_register(const struct bt_mesh_comp *comp)
 	return 0;
 }
 
-bool bt_mesh_new_comp_present(void)
+bool bt_mesh_new_comp_present(int page)
 {
-	return dev_comp128 != NULL || atomic_test_bit(bt_mesh.flags, BT_MESH_COMP_DIRTY);
+	if (page == 128 || page == 129) {
+		return dev_comp128 != NULL || atomic_test_bit(bt_mesh.flags, BT_MESH_COMP_DIRTY);
+	}
+
+	// page == 130
+
+	return false;
 }
 
 int bt_mesh_comp2_register(const struct bt_mesh_comp2 *comp2)
@@ -2248,9 +2254,9 @@ void bt_mesh_model_pub_store(const struct bt_mesh_model *mod)
 
 int bt_mesh_comp_data_get_page(struct net_buf_simple *buf, size_t page, size_t offset)
 {
-	if (page == 0 || page == 128) {
+	if (page == 0 || (dev_comp128 != NULL && page == 128)) {
 		return bt_mesh_comp_data_get_page_0(page, buf, offset);
-	} else if (IS_ENABLED(CONFIG_BT_MESH_COMP_PAGE_1) && (page == 1 || page == 129)) {
+	} else if (IS_ENABLED(CONFIG_BT_MESH_COMP_PAGE_1) && (page == 1 || (dev_comp128 != NULL && page == 129))) {
 		return bt_mesh_comp_data_get_page_1(page, buf, offset);
 	} else if (IS_ENABLED(CONFIG_BT_MESH_COMP_PAGE_2) && (page == 2 || page == 130)) {
 		return bt_mesh_comp_data_get_page_2(buf, offset);
@@ -2342,7 +2348,7 @@ int bt_mesh_comp_store(void)
 
 		err = settings_save_one(comp_data_pages[i].path, buf.data, buf.len);
 		if (err) {
-			LOG_ERR("Failed to store CDP%d: %d", comp_data_pages[i].page, err);
+			LOG_ERR("Failed to store CDP%d: %d", i, err);
 			return err;
 		}
 
@@ -2354,11 +2360,45 @@ int bt_mesh_comp_store(void)
 
 int bt_mesh_comp_change_prepare(void)
 {
-	if (!IS_ENABLED(CONFIG_BT_SETTINGS)) {
-		return -ENOTSUP;
-	}
+//	if (!IS_ENABLED(CONFIG_BT_SETTINGS)) {
+	return -ENOTSUP;
+//	}
 
 	return bt_mesh_comp_store();
+}
+
+int bt_mesh_new_comp_data_store(struct net_buf_simple *page128_buf,
+				struct net_buf_simple *page129_buf)
+{
+	int err;
+
+	struct {
+		const char *path;
+		struct net_buf_simple *buf;
+	} page[] = {
+		{
+			.path = "bt/mesh/cmp/128",
+			.buf = page128_buf,
+		},
+		{
+			.path = "bt/mesh/cmp/129",
+			.buf = page129_buf,
+		},
+	};
+
+	for (int i = 0; i < ARRAY_SIZE(page); i++) {
+		err = settings_save_one(page[i].path, page[i].buf->data, page[i].buf->len);
+		if (err) {
+			LOG_ERR("Failed to store CDP%d: %d", i + 128, err);
+			return err;
+		}
+
+		LOG_DBG("Stored CDP%d", i + 128);
+	}
+
+	atomic_set_bit(bt_mesh.flags, BT_MESH_COMP_DIRTY);
+
+	return 0;
 }
 
 static void comp_data_clear(void)
@@ -2396,24 +2436,23 @@ static int read_comp_cb(const char *key, size_t len, settings_read_cb read_cb,
 int bt_mesh_comp_read(struct net_buf_simple *buf, uint8_t page)
 {
 	size_t original_len = buf->len;
-	int i;
 	int err;
 
 	if (!IS_ENABLED(CONFIG_BT_SETTINGS)) {
 		return -ENOTSUP;
 	}
 
-	for (i = 0; i < ARRAY_SIZE(comp_data_pages); i++) {
-		if (comp_data_pages[i].page == page) {
-			break;
-		}
+	if (page < 128 || page >= 130) {
+		LOG_ERR("Invalid page %d", page);
+		return -EINVAL;
 	}
 
-	if (i == ARRAY_SIZE(comp_data_pages)) {
-		return -ENOENT;
-	}
+	const char *path[] = {
+		"bt/mesh/cmp/128",
+		"bt/mesh/cmp/129",
+	};
 
-	err = settings_load_subtree_direct(comp_data_pages[i].path, read_comp_cb, buf);
+	err = settings_load_subtree_direct(path[page - 128], read_comp_cb, buf);
 
 	if (err) {
 		LOG_ERR("Failed reading composition data: %d", err);
@@ -2636,14 +2675,14 @@ uint8_t bt_mesh_comp_parse_page(struct net_buf_simple *buf)
 	uint8_t page = net_buf_simple_pull_u8(buf);
 
 	if (page >= 130U && IS_ENABLED(CONFIG_BT_MESH_COMP_PAGE_2) &&
-	    (atomic_test_bit(bt_mesh.flags, BT_MESH_COMP_DIRTY) ||
+	    (bt_mesh_new_comp_present(page) ||
 	     IS_ENABLED(CONFIG_BT_MESH_RPR_SRV))) {
 		page = 130U;
 	} else if (page >= 129U && IS_ENABLED(CONFIG_BT_MESH_COMP_PAGE_1) &&
-		   (atomic_test_bit(bt_mesh.flags, BT_MESH_COMP_DIRTY) ||
+		   (bt_mesh_new_comp_present(page) ||
 		    IS_ENABLED(CONFIG_BT_MESH_RPR_SRV))) {
 		page = 129U;
-	} else if (page >= 128U && (atomic_test_bit(bt_mesh.flags, BT_MESH_COMP_DIRTY) ||
+	} else if (page >= 128U && (bt_mesh_new_comp_present(page) ||
 				    IS_ENABLED(CONFIG_BT_MESH_RPR_SRV))) {
 		page = 128U;
 	} else if (page >= 2U && IS_ENABLED(CONFIG_BT_MESH_COMP_PAGE_2)) {

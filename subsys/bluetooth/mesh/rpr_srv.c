@@ -875,7 +875,7 @@ static int handle_link_open(const struct bt_mesh_model *mod, struct bt_mesh_msg_
 		}
 
 		if (refresh == BT_MESH_RPR_NODE_REFRESH_COMPOSITION &&
-		    !bt_mesh_new_comp_present()) {
+		    !bt_mesh_new_comp_present(128)) {
 			LOG_WRN("Composition data page 128 is equal to page 0");
 			status = BT_MESH_RPR_ERR_LINK_CANNOT_OPEN;
 			goto rsp;

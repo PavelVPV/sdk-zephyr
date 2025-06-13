@@ -53,6 +53,8 @@ struct bt_mesh_dfu_metadata {
 	struct bt_mesh_dfu_metadata_fw_ver fw_ver;
 	/** New firmware size. */
 	uint32_t fw_size;
+	/** New CDP (128 & 129) size. */
+	uint32_t cdp_size;
 	/** New firmware core type. */
 	enum bt_mesh_dfu_metadata_fw_core_type fw_core_type;
 	/** Hash of incoming Composition Data. */

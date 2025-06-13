@@ -1120,6 +1120,9 @@ bool bt_mesh_model_is_extended(const struct bt_mesh_model *model);
  */
 int bt_mesh_comp_change_prepare(void);
 
+int bt_mesh_new_comp_data_store(struct net_buf_simple *page128_buf,
+				struct net_buf_simple *page129_buf);
+
 /** @brief Indicate that the metadata will change on next bootup.
  *
  *  Tell the config server that the models metadata is expected to change on
