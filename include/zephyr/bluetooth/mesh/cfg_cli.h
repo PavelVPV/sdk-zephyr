@@ -341,6 +341,24 @@ struct bt_mesh_cfg_cli {
 	struct bt_mesh_msg_ack_ctx ack_ctx;
 };
 
+#if 0
+#define BT_MESH_CFG_CLI_INIT(_srv, _cb, _cli_data) \
+	{ \
+		.cb = _cb, \
+		.model = BT_MESH_MODEL_CNT_CB(BT_MESH_MODEL_ID_CFG_CLI,	\
+				     bt_mesh_cfg_cli_op, NULL,	\
+				     _cli_data, 1, 0, &bt_mesh_cfg_cli_cb) \
+	}
+
+/**
+ *  @brief Generic Configuration Client model composition data entry.
+ *
+ *  @param cli_data Pointer to a @ref bt_mesh_cfg_cli instance.
+ */
+#define BT_MESH_MODEL_CFG_CLI(_srv) \
+	&(_srv)->model
+#endif
+
 /**
  *  @brief Generic Configuration Client model composition data entry.
  *

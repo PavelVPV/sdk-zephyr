@@ -36,9 +36,14 @@ struct bt_mesh_rpr_cli;
  *
  * @param _cli Pointer to a @ref bt_mesh_rpr_cli instance.
  */
-#define BT_MESH_MODEL_RPR_CLI(_cli)                                            \
-	BT_MESH_MODEL_CB(BT_MESH_MODEL_ID_REMOTE_PROV_CLI,                     \
-			 _bt_mesh_rpr_cli_op, NULL, _cli, &_bt_mesh_rpr_cli_cb)
+#define BT_MESH_RPR_CLI_INIT(_cli)                                            \
+	{ \
+		.model = BT_MESH_MODEL_CB(BT_MESH_MODEL_ID_REMOTE_PROV_CLI,                     \
+			 _bt_mesh_rpr_cli_op, NULL, &_cli, &_bt_mesh_rpr_cli_cb) \
+	}
+
+#define BT_MESH_MODEL_RPR_CLI(_cli) \
+	&((_cli)->model)
 
 /** Scan status response */
 struct bt_mesh_rpr_scan_status {
@@ -91,7 +96,7 @@ struct bt_mesh_rpr_cli {
 		enum bt_mesh_rpr_link_state state;
 	} link;
 
-	const struct bt_mesh_model *mod;
+	const struct bt_mesh_model model;
 };
 
 /** @brief Get scanning capabilities of Remote Provisioning Server.

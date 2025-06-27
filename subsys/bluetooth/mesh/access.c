@@ -29,7 +29,7 @@
 #include "va.h"
 #include "delayable_msg.h"
 
-#define LOG_LEVEL CONFIG_BT_MESH_ACCESS_LOG_LEVEL
+#define LOG_LEVEL 4//CONFIG_BT_MESH_ACCESS_LOG_LEVEL
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(bt_mesh_access);
 
@@ -2387,6 +2387,8 @@ int bt_mesh_new_comp_data_store(struct net_buf_simple *page128_buf,
 	};
 
 	for (int i = 0; i < ARRAY_SIZE(page); i++) {
+		LOG_HEXDUMP_WRN(page[i].buf->data, page[i].buf->len, "CDP Page");
+
 		err = settings_save_one(page[i].path, page[i].buf->data, page[i].buf->len);
 		if (err) {
 			LOG_ERR("Failed to store CDP%d: %d", i + 128, err);
@@ -2422,6 +2424,7 @@ static int read_comp_cb(const char *key, size_t len, settings_read_cb read_cb,
 	struct net_buf_simple *buf = param;
 
 	if (len > net_buf_simple_tailroom(buf)) {
+		LOG_ERR("Insufficient space in buffer for reading composition data");
 		return -ENOBUFS;
 	}
 
@@ -2430,7 +2433,9 @@ static int read_comp_cb(const char *key, size_t len, settings_read_cb read_cb,
 		net_buf_simple_add(buf, len);
 	}
 
-	return -EALREADY;
+	LOG_WRN("Read %zu bytes of composition data", len);
+
+	return 0;//-EALREADY;
 }
 
 int bt_mesh_comp_read(struct net_buf_simple *buf, uint8_t page)
@@ -2452,7 +2457,9 @@ int bt_mesh_comp_read(struct net_buf_simple *buf, uint8_t page)
 		"bt/mesh/cmp/129",
 	};
 
+	LOG_ERR("Reading composition data from %s", path[page - 128]);
 	err = settings_load_subtree_direct(path[page - 128], read_comp_cb, buf);
+	LOG_DBG("Err: %d, buf->len %zu", err, buf->len);
 
 	if (err) {
 		LOG_ERR("Failed reading composition data: %d", err);

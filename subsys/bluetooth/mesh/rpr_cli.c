@@ -371,7 +371,6 @@ static int rpr_cli_init(const struct bt_mesh_model *mod)
 
 	struct bt_mesh_rpr_cli *cli = mod->rt->user_data;
 
-	cli->mod = mod;
 	cli->link.time = LINK_TIMEOUT_SECONDS_DEFAULT;
 
 	bt_mesh_msg_ack_ctx_init(&cli->scan_ack_ctx);
@@ -431,7 +430,7 @@ static int tx_wait(struct bt_mesh_rpr_cli *cli,
 		return err;
 	}
 
-	err = bt_mesh_model_send(cli->mod, &ctx, buf, NULL, NULL);
+	err = bt_mesh_model_send(&cli->model, &ctx, buf, NULL, NULL);
 	if (err) {
 		bt_mesh_msg_ack_ctx_clear(ack_ctx);
 		LOG_WRN("TX fail");
@@ -546,7 +545,7 @@ int bt_mesh_rpr_scan_start_ext(struct bt_mesh_rpr_cli *cli,
 		net_buf_simple_add_u8(&buf, timeout);
 	}
 
-	return bt_mesh_model_send(cli->mod, &ctx, &buf, NULL, NULL);
+	return bt_mesh_model_send(&cli->model, &ctx, &buf, NULL, NULL);
 }
 
 int bt_mesh_rpr_scan_stop(struct bt_mesh_rpr_cli *cli,
@@ -595,7 +594,7 @@ static int link_open_prov(struct bt_mesh_rpr_cli *cli,
 		net_buf_simple_add_u8(&buf, cli->link.time);
 	}
 
-	return bt_mesh_model_send(cli->mod, &ctx, &buf, NULL, NULL);
+	return bt_mesh_model_send(&cli->model, &ctx, &buf, NULL, NULL);
 }
 
 static int link_open_node(struct bt_mesh_rpr_cli *cli,
@@ -609,7 +608,7 @@ static int link_open_node(struct bt_mesh_rpr_cli *cli,
 
 	net_buf_simple_add_u8(&buf, type);
 
-	return bt_mesh_model_send(cli->mod, &ctx, &buf, NULL, NULL);
+	return bt_mesh_model_send(&cli->model, &ctx, &buf, NULL, NULL);
 }
 
 static int link_close(struct bt_mesh_rpr_cli *cli,
@@ -627,7 +626,7 @@ static int link_close(struct bt_mesh_rpr_cli *cli,
 
 	net_buf_simple_add_u8(&buf, status);
 
-	err = bt_mesh_model_send(cli->mod, &ctx, &buf, NULL, NULL);
+	err = bt_mesh_model_send(&cli->model, &ctx, &buf, NULL, NULL);
 	if (err) {
 		link_reset(cli);
 	}
@@ -667,7 +666,7 @@ static int send(struct bt_mesh_rpr_cli *cli, struct net_buf_simple *buf,
 	 */
 	net_buf_simple_push_be16(buf, RPR_OP_PDU_SEND);
 
-	err = bt_mesh_model_send(cli->mod, &ctx, buf, &pdu_send_cb, cli);
+	err = bt_mesh_model_send(&cli->model, &ctx, buf, &pdu_send_cb, cli);
 	if (err) {
 		link_closed(cli,
 			    BT_MESH_RPR_ERR_LINK_CLOSED_AS_CANNOT_SEND_PDU);
