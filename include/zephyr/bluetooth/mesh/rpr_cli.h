@@ -36,8 +36,9 @@ struct bt_mesh_rpr_cli;
  *
  * @param _cli Pointer to a @ref bt_mesh_rpr_cli instance.
  */
-#define BT_MESH_RPR_CLI_INIT(_cli)                                            \
+#define BT_MESH_RPR_CLI_INIT(_cli, _scan_report)                                            \
 	{ \
+		.scan_report = _scan_report, \
 		.model = BT_MESH_MODEL_CB(BT_MESH_MODEL_ID_REMOTE_PROV_CLI,                     \
 			 _bt_mesh_rpr_cli_op, NULL, &_cli, &_bt_mesh_rpr_cli_cb) \
 	}

@@ -74,9 +74,8 @@ static void rpr_scan_report(struct bt_mesh_rpr_cli *cli,
 	}
 }
 
-struct bt_mesh_rpr_cli bt_mesh_shell_rpr_cli = {
-	.scan_report = rpr_scan_report,
-};
+struct bt_mesh_rpr_cli bt_mesh_shell_rpr_cli = BT_MESH_RPR_CLI_INIT(bt_mesh_shell_rpr_cli,
+								    rpr_scan_report);
 
 /***************************************************************************************************
  * Shell Commands
