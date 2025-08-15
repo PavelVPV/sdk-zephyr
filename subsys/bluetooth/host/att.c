@@ -57,6 +57,10 @@ LOG_MODULE_REGISTER(bt_att);
 #define ATT_CHAN_MAX				1
 #endif /* CONFIG_BT_EATT */
 
+#if !defined(CONFIG_BT_EATT)
+#define UATT_CHANNEL(att) CONTAINER_OF(sys_slist_peek_head(&(att)->chans), struct bt_att_chan, node)
+#endif
+
 typedef enum __packed {
 		ATT_COMMAND,
 		ATT_REQUEST,
@@ -799,9 +803,11 @@ static int bt_att_chan_send(struct bt_att_chan *chan, struct net_buf *buf)
 
 static void att_send_process(struct bt_att *att)
 {
-	struct bt_att_chan *chan, *tmp, *prev = NULL;
+	struct bt_att_chan *chan;
+	__maybe_unused struct bt_att_chan *tmp, *prev = NULL;
 	int err = 0;
 
+#if defined(CONFIG_BT_EATT)
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&att->chans, chan, tmp, node) {
 		if (err == -ENOENT && prev &&
 		    (bt_att_is_enhanced(chan) == bt_att_is_enhanced(prev))) {
@@ -811,15 +817,18 @@ static void att_send_process(struct bt_att *att)
 			 */
 			continue;
 		}
-
+#else
+		chan = UATT_CHANNEL(att);
+#endif
 		err = process_queue(chan, &att->tx_queue);
 		if (!err) {
 			/* Success */
 			return;
 		}
-
+#if defined(CONFIG_BT_EATT)
 		prev = chan;
 	}
+#endif
 }
 
 static void bt_att_chan_send_rsp(struct bt_att_chan *chan, struct net_buf *buf)
@@ -922,8 +931,10 @@ static uint8_t att_mtu_req(struct bt_att_chan *chan, struct net_buf *buf)
 static void att_req_send_process(struct bt_att *att)
 {
 	struct bt_att_req *req = NULL;
-	struct bt_att_chan *chan, *tmp, *prev = NULL;
+	struct bt_att_chan *chan;
+	__maybe_unused struct bt_att_chan *tmp, *prev = NULL;
 
+#if defined(CONFIG_BT_EATT)
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&att->chans, chan, tmp, node) {
 		/* If there is an ongoing transaction, do not use the channel */
 		if (chan->req) {
@@ -953,6 +964,29 @@ static void att_req_send_process(struct bt_att *att)
 		/* Prepend back to the list as it could not be sent */
 		sys_slist_prepend(&att->reqs, &req->node);
 	}
+#else
+	if (sys_slist_peek_head(&att->chans) == NULL) {
+		return;
+	}
+
+	chan = UATT_CHANNEL(att);
+
+	if (chan->req) {
+		return;
+	}
+
+	req = get_first_req_matching_chan(&att->reqs, chan);
+	if (!req) {
+		return;
+	}
+
+	if (bt_att_chan_req_send(chan, req) == 0) {
+		return;
+	}
+
+	/* Prepend back to the list as it could not be sent */
+	sys_slist_prepend(&att->reqs, &req->node);
+#endif /* CONFIG_BT_EATT */
 }
 
 static uint8_t att_handle_rsp(struct bt_att_chan *chan, void *pdu, uint16_t len,
@@ -3058,7 +3092,8 @@ static struct bt_att *att_get(struct bt_conn *conn)
 struct net_buf *bt_att_create_pdu(struct bt_conn *conn, uint8_t op, size_t len)
 {
 	struct bt_att *att;
-	struct bt_att_chan *chan, *tmp;
+	struct bt_att_chan *chan;
+	__maybe_unused struct bt_att_chan *tmp;
 
 	att = att_get(conn);
 	if (!att) {
@@ -3066,6 +3101,7 @@ struct net_buf *bt_att_create_pdu(struct bt_conn *conn, uint8_t op, size_t len)
 	}
 
 	/* This allocator should _not_ be used for RSPs. */
+#if defined(CONFIG_BT_EATT)
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&att->chans, chan, tmp, node) {
 		if (len + sizeof(op) > bt_att_mtu(chan)) {
 			continue;
@@ -3077,6 +3113,15 @@ struct net_buf *bt_att_create_pdu(struct bt_conn *conn, uint8_t op, size_t len)
 	LOG_WRN("No ATT channel for MTU %zu", len + sizeof(op));
 
 	return NULL;
+#else
+	chan = UATT_CHANNEL(att);
+
+	if (len + sizeof(op) > bt_att_mtu(chan)) {
+		return NULL;
+	}
+
+	return bt_att_chan_create_pdu(chan, op, len);
+#endif /* CONFIG_BT_EATT */
 }
 
 struct net_buf *bt_att_create_rsp_pdu(struct bt_att_chan *chan, uint8_t op)
@@ -3403,7 +3448,7 @@ static void bt_att_reconfigured(struct bt_l2cap_chan *l2cap_chan)
 
 static struct bt_att_chan *att_chan_new(struct bt_att *att, atomic_val_t flags)
 {
-	int quota = 0;
+	__maybe_unused int quota = 0;
 	static struct bt_l2cap_chan_ops ops = {
 		.connected = bt_att_connected,
 		.disconnected = bt_att_disconnected,
@@ -3420,6 +3465,7 @@ static struct bt_att_chan *att_chan_new(struct bt_att *att, atomic_val_t flags)
 	};
 	struct bt_att_chan *chan;
 
+#if defined(CONFIG_BT_EATT)
 	SYS_SLIST_FOR_EACH_CONTAINER(&att->chans, chan, node) {
 		if (chan->att == att) {
 			quota++;
@@ -3430,6 +3476,9 @@ static struct bt_att_chan *att_chan_new(struct bt_att *att, atomic_val_t flags)
 			return NULL;
 		}
 	}
+#else
+	__ASSERT_NO_MSG(sys_slist_peek_head(&att->chans) == NULL);
+#endif /* CONFIG_BT_EATT */
 
 	if (k_mem_slab_alloc(&chan_slab, (void **)&chan, K_NO_WAIT)) {
 		LOG_WRN("No available ATT channel for conn %p", att->conn);
@@ -3882,15 +3931,16 @@ void bt_att_init(void)
 
 uint16_t bt_att_get_mtu(struct bt_conn *conn)
 {
-	struct bt_att_chan *chan, *tmp;
+	__maybe_unused struct bt_att_chan *chan, *tmp;
 	struct bt_att *att;
-	uint16_t mtu = 0;
+	__maybe_unused uint16_t mtu = 0;
 
 	att = att_get(conn);
 	if (!att) {
 		return 0;
 	}
 
+#if defined(CONFIG_BT_EATT)
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&att->chans, chan, tmp, node) {
 		if (bt_att_mtu(chan) > mtu) {
 			mtu = bt_att_mtu(chan);
@@ -3898,11 +3948,15 @@ uint16_t bt_att_get_mtu(struct bt_conn *conn)
 	}
 
 	return mtu;
+#else
+	return bt_att_get_uatt_mtu(conn);
+#endif
 }
 
 uint16_t bt_att_get_uatt_mtu(struct bt_conn *conn)
 {
-	struct bt_att_chan *chan, *tmp;
+	struct bt_att_chan *chan;
+	__maybe_unused struct bt_att_chan *tmp;
 	struct bt_att *att;
 
 	att = att_get(conn);
@@ -3910,6 +3964,7 @@ uint16_t bt_att_get_uatt_mtu(struct bt_conn *conn)
 		return 0;
 	}
 
+#if defined(CONFIG_BT_EATT)
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&att->chans, chan, tmp, node) {
 		if (!bt_att_is_enhanced(chan)) {
 			return bt_att_mtu(chan);
@@ -3919,14 +3974,20 @@ uint16_t bt_att_get_uatt_mtu(struct bt_conn *conn)
 	LOG_WRN("No UATT channel found in %p", conn);
 
 	return 0;
+#else
+	chan = UATT_CHANNEL(att);
+
+	return bt_att_mtu(chan);
+#endif
 }
 
 static void att_chan_mtu_updated(struct bt_att_chan *updated_chan)
 {
 	struct bt_att *att = updated_chan->att;
-	struct bt_att_chan *chan, *tmp;
-	uint16_t max_tx = 0, max_rx = 0;
+	__maybe_unused struct bt_att_chan *chan, *tmp;
+	__maybe_unused uint16_t max_tx = 0, max_rx = 0;
 
+#if defined(CONFIG_BT_EATT)
 	/* Get maximum MTU's of other channels */
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&att->chans, chan, tmp, node) {
 		if (chan == updated_chan) {
@@ -3943,6 +4004,10 @@ static void att_chan_mtu_updated(struct bt_att_chan *updated_chan)
 		max_rx = MAX(max_rx, updated_chan->chan.rx.mtu);
 		bt_gatt_att_max_mtu_changed(att->conn, max_tx, max_rx);
 	}
+#else
+	bt_gatt_att_max_mtu_changed(att->conn, updated_chan->chan.tx.mtu,
+				    updated_chan->chan.rx.mtu);
+#endif
 }
 
 struct bt_att_req *bt_att_req_alloc(k_timeout_t timeout)
@@ -4056,7 +4121,8 @@ static bool bt_att_chan_req_cancel(struct bt_att_chan *chan,
 void bt_att_req_cancel(struct bt_conn *conn, struct bt_att_req *req)
 {
 	struct bt_att *att;
-	struct bt_att_chan *chan, *tmp;
+	struct bt_att_chan *chan;
+	__maybe_unused struct bt_att_chan *tmp;
 
 	LOG_DBG("req %p", req);
 
@@ -4069,12 +4135,20 @@ void bt_att_req_cancel(struct bt_conn *conn, struct bt_att_req *req)
 		return;
 	}
 
+#if defined(CONFIG_BT_EATT)
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&att->chans, chan, tmp, node) {
 		/* Check if request is outstanding */
 		if (bt_att_chan_req_cancel(chan, req)) {
 			return;
 		}
 	}
+#else
+	chan = UATT_CHANNEL(att);
+
+	if (bt_att_chan_req_cancel(chan, req)) {
+		return;
+	}
+#endif
 
 	/* Remove request from the list */
 	sys_slist_find_and_remove(&att->reqs, &req->node);
@@ -4093,11 +4167,19 @@ struct bt_att_req *bt_att_find_req_by_user_data(struct bt_conn *conn, const void
 		return NULL;
 	}
 
+#if defined(CONFIG_BT_EATT)
 	SYS_SLIST_FOR_EACH_CONTAINER(&att->chans, chan, node) {
 		if (chan->req->user_data == user_data) {
 			return chan->req;
 		}
 	}
+#else
+	chan = UATT_CHANNEL(att);
+
+	if (chan->req->user_data == user_data) {
+		return chan->req;
+	}
+#endif
 
 	SYS_SLIST_FOR_EACH_CONTAINER(&att->reqs, req, node) {
 		if (req->user_data == user_data) {
@@ -4126,9 +4208,15 @@ void bt_att_clear_out_of_sync_sent(struct bt_conn *conn)
 		return;
 	}
 
+#if defined(CONFIG_BT_EATT)
 	SYS_SLIST_FOR_EACH_CONTAINER(&att->chans, chan, node) {
 		atomic_clear_bit(chan->flags, ATT_OUT_OF_SYNC_SENT);
 	}
+#else
+	chan = UATT_CHANNEL(att);
+
+	atomic_clear_bit(chan->flags, ATT_OUT_OF_SYNC_SENT);
+#endif
 }
 
 bool bt_att_out_of_sync_sent_on_fixed(struct bt_conn *conn)
@@ -4175,6 +4263,10 @@ bool bt_att_tx_meta_data_match(const struct net_buf *buf, bt_gatt_complete_func_
 
 bool bt_att_chan_opt_valid(struct bt_conn *conn, enum bt_att_chan_opt chan_opt)
 {
+	if (!IS_ENABLED(CONFIG_BT_EATT)) {
+		return false;
+	}
+
 	if ((chan_opt & (BT_ATT_CHAN_OPT_ENHANCED_ONLY | BT_ATT_CHAN_OPT_UNENHANCED_ONLY)) ==
 	    (BT_ATT_CHAN_OPT_ENHANCED_ONLY | BT_ATT_CHAN_OPT_UNENHANCED_ONLY)) {
 		/* Enhanced and Unenhanced are mutually exclusive */
