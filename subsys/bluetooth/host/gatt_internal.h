@@ -35,6 +35,15 @@
 						BT_GATT_PERM_READ_AUTHEN | \
 						BT_GATT_PERM_READ_LESC)
 
+extern const struct bt_uuid *bt_gatt_uuid_ccc;
+extern const struct bt_uuid *bt_gatt_uuid_chrc;
+extern const struct bt_uuid *bt_gatt_uuid_primary;
+extern const struct bt_uuid *bt_gatt_uuid_secondary;
+extern const struct bt_uuid *bt_gatt_uuid_include;
+extern const struct bt_uuid *bt_gatt_uuid_cep;
+extern const struct bt_uuid *bt_gatt_uuid_scc;
+extern const struct bt_uuid *bt_gatt_uuid_cpf;
+
 void bt_gatt_init(void);
 void bt_gatt_connected(struct bt_conn *conn);
 void bt_gatt_att_max_mtu_changed(struct bt_conn *conn, uint16_t tx, uint16_t rx);
@@ -42,8 +51,6 @@ void bt_gatt_encrypt_change(struct bt_conn *conn);
 void bt_gatt_disconnected(struct bt_conn *conn);
 
 bool bt_gatt_change_aware(struct bt_conn *conn, bool req);
-
-int bt_gatt_store_ccc(uint8_t id, const bt_addr_le_t *addr);
 
 int bt_gatt_clear(uint8_t id, const bt_addr_le_t *addr);
 

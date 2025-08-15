@@ -291,7 +291,9 @@ static struct bt_smp_br bt_smp_br_pool[CONFIG_BT_MAX_CONN];
 static struct bt_smp bt_smp_pool[CONFIG_BT_MAX_CONN];
 static bool bondable = IS_ENABLED(CONFIG_BT_BONDABLE);
 static bool sc_oobd_present;
+#if !defined(CONFIG_BT_SMP_SC_PAIR_ONLY)
 static bool legacy_oobd_present;
+#endif
 static bool sc_supported;
 static const uint8_t *sc_public_key;
 
@@ -2798,15 +2800,8 @@ static uint8_t legacy_pairing_rsp(struct bt_smp *smp)
 }
 #endif /* CONFIG_BT_CENTRAL */
 #else
-static uint8_t smp_encrypt_info(struct bt_smp *smp, struct net_buf *buf)
-{
-	return BT_SMP_ERR_CMD_NOTSUPP;
-}
-
-static uint8_t smp_central_ident(struct bt_smp *smp, struct net_buf *buf)
-{
-	return BT_SMP_ERR_CMD_NOTSUPP;
-}
+#define smp_encrypt_info smp_cmd_not_supported
+#define smp_central_ident smp_cmd_not_supported
 #endif /* !CONFIG_BT_SMP_SC_PAIR_ONLY */
 
 static int smp_init(struct bt_smp *smp)
@@ -2847,10 +2842,13 @@ void bt_le_oob_set_sc_flag(bool enable)
 	sc_oobd_present = enable;
 }
 
+#if !defined(CONFIG_BT_SMP_SC_PAIR_ONLY)
 void bt_le_oob_set_legacy_flag(bool enable)
 {
 	legacy_oobd_present = enable;
+
 }
+#endif /* CONFIG_BT_SMP_SC_PAIR_ONLY */
 
 static uint8_t get_auth(struct bt_smp *smp, uint8_t auth)
 {
@@ -3042,6 +3040,11 @@ bool bt_smp_request_ltk(struct bt_conn *conn, uint64_t rand, uint16_t ediv, uint
 	return false;
 }
 
+__maybe_unused static uint8_t smp_cmd_not_supported(struct bt_smp *smp, struct net_buf *buf)
+{
+	return BT_SMP_ERR_CMD_NOTSUPP;
+}
+
 #if defined(CONFIG_BT_PERIPHERAL)
 static int smp_send_security_req(struct bt_conn *conn)
 {
@@ -3172,8 +3175,12 @@ static uint8_t smp_pairing_req(struct bt_smp *smp, struct net_buf *buf)
 		rsp->oob_flag = sc_oobd_present ? BT_SMP_OOB_PRESENT :
 				BT_SMP_OOB_NOT_PRESENT;
 	} else {
+#if !defined(CONFIG_BT_SMP_SC_PAIR_ONLY)
 		rsp->oob_flag = legacy_oobd_present ? BT_SMP_OOB_PRESENT :
 				BT_SMP_OOB_NOT_PRESENT;
+#else
+		rsp->oob_flag = BT_SMP_OOB_NOT_PRESENT;
+#endif
 	}
 
 	if ((rsp->auth_req & BT_SMP_AUTH_CT2) &&
@@ -3250,10 +3257,7 @@ static uint8_t smp_pairing_req(struct bt_smp *smp, struct net_buf *buf)
 	return send_pairing_rsp(smp);
 }
 #else
-static uint8_t smp_pairing_req(struct bt_smp *smp, struct net_buf *buf)
-{
-	return BT_SMP_ERR_CMD_NOTSUPP;
-}
+#define smp_pairing_req smp_cmd_not_supported
 #endif /* CONFIG_BT_PERIPHERAL */
 
 static uint8_t sc_send_public_key(struct bt_smp *smp)
@@ -3346,7 +3350,11 @@ static int smp_send_pairing_req(struct bt_conn *conn)
 	 * set OOB flag if any OOB data is present and assume to peer device
 	 * provides OOB data that will match it's pairing type.
 	 */
-	req->oob_flag = (legacy_oobd_present || sc_oobd_present) ?
+	req->oob_flag = (
+#if !defined(CONFIG_BT_SMP_SC_PAIR_ONLY)
+			 legacy_oobd_present ||
+#endif
+			 sc_oobd_present) ?
 				BT_SMP_OOB_PRESENT : BT_SMP_OOB_NOT_PRESENT;
 
 	req->max_key_size = BT_SMP_MAX_ENC_KEY_SIZE;
@@ -3494,10 +3502,7 @@ static uint8_t smp_pairing_rsp(struct bt_smp *smp, struct net_buf *buf)
 	return sc_send_public_key(smp);
 }
 #else
-static uint8_t smp_pairing_rsp(struct bt_smp *smp, struct net_buf *buf)
-{
-	return BT_SMP_ERR_CMD_NOTSUPP;
-}
+#define smp_pairing_rsp smp_cmd_not_supported
 #endif /* CONFIG_BT_CENTRAL */
 
 static uint8_t smp_pairing_confirm(struct bt_smp *smp, struct net_buf *buf)
@@ -4256,10 +4261,7 @@ static uint8_t smp_signing_info(struct bt_smp *smp, struct net_buf *buf)
 	return 0;
 }
 #else
-static uint8_t smp_signing_info(struct bt_smp *smp, struct net_buf *buf)
-{
-	return BT_SMP_ERR_CMD_NOTSUPP;
-}
+#define smp_signing_info smp_cmd_not_supported
 #endif /* CONFIG_BT_SIGNING */
 
 #if defined(CONFIG_BT_CENTRAL)
@@ -4364,10 +4366,7 @@ pair:
 	return 0;
 }
 #else
-static uint8_t smp_security_request(struct bt_smp *smp, struct net_buf *buf)
-{
-	return BT_SMP_ERR_CMD_NOTSUPP;
-}
+#define smp_security_request smp_cmd_not_supported
 #endif /* CONFIG_BT_CENTRAL */
 
 __maybe_unused static uint8_t generate_dhkey(struct bt_smp *smp)
@@ -5163,16 +5162,6 @@ int bt_smp_sign(struct bt_conn *conn, struct net_buf *buf)
 	keys->local_csrk.cnt++;
 
 	return 0;
-}
-#else
-int bt_smp_sign_verify(struct bt_conn *conn, struct net_buf *buf)
-{
-	return -ENOTSUP;
-}
-
-int bt_smp_sign(struct bt_conn *conn, struct net_buf *buf)
-{
-	return -ENOTSUP;
 }
 #endif /* CONFIG_BT_SIGNING */
 

@@ -33,7 +33,7 @@ config BT_ATT_PREPARE_COUNT
 config BT_ATT_RETRY_ON_SEC_ERR
 	bool "Automatic security elevation and retry on security errors"
 	default y
-	depends on BT_SMP
+	depends on BT_SMP && BT_GATT_CLIENT
 	help
 	  If an ATT request fails due to insufficient security, the host will
 	  try to elevate the security level and retry the ATT request.
@@ -339,5 +339,10 @@ config BT_GATT_AUTHORIZATION_CUSTOM
 	  authorization logic for GATT operations that can be registered
 	  with the bt_gatt_authorization_cb_register API. See the API
 	  documentation for more details.
+
+config BT_GATT_CALLBACKS
+	bool "GATT Callbacks"
+	help
+	  TBU
 
 endmenu

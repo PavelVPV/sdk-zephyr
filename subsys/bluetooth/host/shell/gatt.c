@@ -691,16 +691,16 @@ static uint8_t print_attr(const struct bt_gatt_attr *attr, uint16_t handle,
 
 	stats.attr_count++;
 
-	if (!bt_uuid_cmp(attr->uuid, BT_UUID_GATT_PRIMARY) ||
-	    !bt_uuid_cmp(attr->uuid, BT_UUID_GATT_SECONDARY)) {
+	if (!bt_uuid_cmp(attr->uuid, bt_gatt_uuid_primary) ||
+	    !bt_uuid_cmp(attr->uuid, bt_gatt_uuid_secondary)) {
 		stats.svc_count++;
 	}
 
-	if (!bt_uuid_cmp(attr->uuid, BT_UUID_GATT_CHRC)) {
+	if (!bt_uuid_cmp(attr->uuid, bt_gatt_uuid_chrc)) {
 		stats.chrc_count++;
 	}
 
-	if (!bt_uuid_cmp(attr->uuid, BT_UUID_GATT_CCC) &&
+	if (!bt_uuid_cmp(attr->uuid, bt_gatt_uuid_ccc) &&
 	    attr->write == bt_gatt_attr_write_ccc) {
 		stats.ccc_count++;
 	}

@@ -356,6 +356,11 @@ config BT_CONN_CHECK_NULL_BEFORE_CREATE
 	  dereferencing, the connection object stays alive which can lead to an
 	  unpredictable behavior.
 
+config BT_CONN_DYNAMIC_CALLBACKS
+	bool "Dynamic connection callbacks"
+	help
+	  TBU
+
 config BT_USER_PHY_UPDATE
 	bool "User control of PHY Update Procedure"
 	depends on BT_PHY_UPDATE

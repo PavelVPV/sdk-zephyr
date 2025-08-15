@@ -165,7 +165,8 @@ __l2cap_lookup_ident(struct bt_conn *conn, uint16_t ident, uint16_t req_opcode, 
 }
 #endif /* CONFIG_BT_L2CAP_DYNAMIC_CHANNEL */
 
-void bt_l2cap_chan_remove(struct bt_conn *conn, struct bt_l2cap_chan *ch)
+#if defined(CONFIG_BT_L2CAP_DYNAMIC_CHANNEL)
+static void bt_l2cap_chan_remove(struct bt_conn *conn, struct bt_l2cap_chan *ch)
 {
 	struct bt_l2cap_chan *chan;
 	sys_snode_t *prev = NULL;
@@ -179,8 +180,11 @@ void bt_l2cap_chan_remove(struct bt_conn *conn, struct bt_l2cap_chan *ch)
 		prev = &chan->node;
 	}
 }
+#endif
 
-const char *bt_l2cap_chan_state_str(bt_l2cap_chan_state_t state)
+#if defined(CONFIG_BT_L2CAP_DYNAMIC_CHANNEL)
+#if defined(CONFIG_BT_L2CAP_LOG_LEVEL_DBG)
+static const char *bt_l2cap_chan_state_str(bt_l2cap_chan_state_t state)
 {
 	switch (state) {
 	case BT_L2CAP_DISCONNECTED:
@@ -198,9 +202,7 @@ const char *bt_l2cap_chan_state_str(bt_l2cap_chan_state_t state)
 	}
 }
 
-#if defined(CONFIG_BT_L2CAP_DYNAMIC_CHANNEL)
-#if defined(CONFIG_BT_L2CAP_LOG_LEVEL_DBG)
-void bt_l2cap_chan_set_state_debug(struct bt_l2cap_chan *chan,
+static void bt_l2cap_chan_set_state_debug(struct bt_l2cap_chan *chan,
 				   bt_l2cap_chan_state_t state,
 				   const char *func, int line)
 {
@@ -243,8 +245,12 @@ void bt_l2cap_chan_set_state_debug(struct bt_l2cap_chan *chan,
 
 	le_chan->state = state;
 }
+
+#define bt_l2cap_chan_set_state(_chan, _state) \
+	bt_l2cap_chan_set_state_debug(_chan, _state, __func__, __LINE__)
+
 #else
-void bt_l2cap_chan_set_state(struct bt_l2cap_chan *chan,
+static void bt_l2cap_chan_set_state(struct bt_l2cap_chan *chan,
 			     bt_l2cap_chan_state_t state)
 {
 	BT_L2CAP_LE_CHAN(chan)->state = state;
@@ -254,7 +260,7 @@ void bt_l2cap_chan_set_state(struct bt_l2cap_chan *chan,
 
 static void cancel_data_ready(struct bt_l2cap_le_chan *lechan);
 static bool chan_has_data(struct bt_l2cap_le_chan *lechan);
-void bt_l2cap_chan_del(struct bt_l2cap_chan *chan)
+static void bt_l2cap_chan_del(struct bt_l2cap_chan *chan)
 {
 	const struct bt_l2cap_chan_ops *ops = chan->ops;
 	struct bt_l2cap_le_chan *le_chan = BT_L2CAP_LE_CHAN(chan);
@@ -329,7 +335,7 @@ static void l2cap_rx_process(struct k_work *work)
 }
 #endif /* CONFIG_BT_L2CAP_DYNAMIC_CHANNEL */
 
-void bt_l2cap_chan_add(struct bt_conn *conn, struct bt_l2cap_chan *chan,
+static void bt_l2cap_chan_add(struct bt_conn *conn, struct bt_l2cap_chan *chan,
 		       bt_l2cap_chan_destroy_t destroy)
 {
 	/* Attach channel to the connection */
