@@ -1336,7 +1336,7 @@ static void sc_indicate_rsp(struct bt_conn *conn,
 	 * The client receives and confirms a Handle Value Indication
 	 * for the Service Changed characteristic
 	 */
-	if (bt_att_fixed_chan_only(conn)) {
+	if (!IS_ENABLED(CONFIG_BT_EATT) || bt_att_fixed_chan_only(conn)) {
 		cfg = find_cf_cfg(conn);
 		if (cfg && CF_ROBUST_CACHING(cfg)) {
 			set_change_aware(cfg, true);
@@ -3272,7 +3272,7 @@ static void sc_restore_rsp(struct bt_conn *conn,
 	 * for the Service Changed characteristic
 	 */
 
-	if (bt_att_fixed_chan_only(conn)) {
+	if (!IS_ENABLED(CONFIG_BT_EATT) || bt_att_fixed_chan_only(conn)) {
 		cfg = find_cf_cfg(conn);
 		if (cfg && CF_ROBUST_CACHING(cfg)) {
 			set_change_aware(cfg, true);
@@ -6079,7 +6079,7 @@ bool bt_gatt_change_aware(struct bt_conn *conn, bool req)
 	 * set to Database Out Of Sync (0x12) and then the server receives
 	 * another ATT request from the client.
 	 */
-	if (bt_att_fixed_chan_only(conn) && bt_att_out_of_sync_sent_on_fixed(conn)) {
+	if ((!IS_ENABLED(CONFIG_BT_EATT) || bt_att_fixed_chan_only(conn)) && bt_att_out_of_sync_sent_on_fixed(conn)) {
 		atomic_clear_bit(cfg->flags, CF_DB_HASH_READ);
 		bt_att_clear_out_of_sync_sent(conn);
 		set_change_aware(cfg, true);

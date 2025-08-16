@@ -803,7 +803,8 @@ static int bt_att_chan_send(struct bt_att_chan *chan, struct net_buf *buf)
 
 static void att_send_process(struct bt_att *att)
 {
-	struct bt_att_chan *chan, *tmp, *prev = NULL;
+	struct bt_att_chan *chan;
+	__maybe_unused struct bt_att_chan *tmp, *prev = NULL;
 	int err = 0;
 
 #if defined(CONFIG_BT_EATT)
@@ -930,7 +931,8 @@ static uint8_t att_mtu_req(struct bt_att_chan *chan, struct net_buf *buf)
 static void att_req_send_process(struct bt_att *att)
 {
 	struct bt_att_req *req = NULL;
-	struct bt_att_chan *chan, *tmp, *prev = NULL;
+	struct bt_att_chan *chan;
+	__maybe_unused struct bt_att_chan *tmp, *prev = NULL;
 
 #if defined(CONFIG_BT_EATT)
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&att->chans, chan, tmp, node) {
@@ -3090,7 +3092,8 @@ static struct bt_att *att_get(struct bt_conn *conn)
 struct net_buf *bt_att_create_pdu(struct bt_conn *conn, uint8_t op, size_t len)
 {
 	struct bt_att *att;
-	struct bt_att_chan *chan, *tmp;
+	struct bt_att_chan *chan;
+	__maybe_unused struct bt_att_chan *tmp;
 
 	att = att_get(conn);
 	if (!att) {
@@ -3445,7 +3448,6 @@ static void bt_att_reconfigured(struct bt_l2cap_chan *l2cap_chan)
 
 static struct bt_att_chan *att_chan_new(struct bt_att *att, atomic_val_t flags)
 {
-	int quota = 0;
 	static struct bt_l2cap_chan_ops ops = {
 		.connected = bt_att_connected,
 		.disconnected = bt_att_disconnected,
@@ -3463,6 +3465,8 @@ static struct bt_att_chan *att_chan_new(struct bt_att *att, atomic_val_t flags)
 	struct bt_att_chan *chan;
 
 #if defined(CONFIG_BT_EATT)
+	int quota = 0;
+
 	SYS_SLIST_FOR_EACH_CONTAINER(&att->chans, chan, node) {
 		if (chan->att == att) {
 			quota++;
@@ -3928,9 +3932,7 @@ void bt_att_init(void)
 
 uint16_t bt_att_get_mtu(struct bt_conn *conn)
 {
-	struct bt_att_chan *chan, *tmp;
 	struct bt_att *att;
-	uint16_t mtu = 0;
 
 	att = att_get(conn);
 	if (!att) {
@@ -3938,6 +3940,9 @@ uint16_t bt_att_get_mtu(struct bt_conn *conn)
 	}
 
 #if defined(CONFIG_BT_EATT)
+	__maybe_unused struct bt_att_chan *chan, *tmp;
+	uint16_t mtu = 0;
+
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&att->chans, chan, tmp, node) {
 		if (bt_att_mtu(chan) > mtu) {
 			mtu = bt_att_mtu(chan);
@@ -3945,11 +3950,15 @@ uint16_t bt_att_get_mtu(struct bt_conn *conn)
 	}
 
 	return mtu;
+#else
+	return bt_att_get_uatt_mtu(conn);
+#endif
 }
 
 uint16_t bt_att_get_uatt_mtu(struct bt_conn *conn)
 {
-	struct bt_att_chan *chan, *tmp;
+	struct bt_att_chan *chan;
+	__maybe_unused struct bt_att_chan *tmp;
 	struct bt_att *att;
 
 	att = att_get(conn);
@@ -3977,10 +3986,10 @@ uint16_t bt_att_get_uatt_mtu(struct bt_conn *conn)
 static void att_chan_mtu_updated(struct bt_att_chan *updated_chan)
 {
 	struct bt_att *att = updated_chan->att;
-	struct bt_att_chan *chan, *tmp;
+#if defined(CONFIG_BT_EATT)
+	__maybe_unused struct bt_att_chan *chan, *tmp;
 	uint16_t max_tx = 0, max_rx = 0;
 
-#if defined(CONFIG_BT_EATT)
 	/* Get maximum MTU's of other channels */
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&att->chans, chan, tmp, node) {
 		if (chan == updated_chan) {
@@ -4114,7 +4123,8 @@ static bool bt_att_chan_req_cancel(struct bt_att_chan *chan,
 void bt_att_req_cancel(struct bt_conn *conn, struct bt_att_req *req)
 {
 	struct bt_att *att;
-	struct bt_att_chan *chan, *tmp;
+	struct bt_att_chan *chan;
+	__maybe_unused struct bt_att_chan *tmp;
 
 	LOG_DBG("req %p", req);
 
@@ -4255,6 +4265,10 @@ bool bt_att_tx_meta_data_match(const struct net_buf *buf, bt_gatt_complete_func_
 
 bool bt_att_chan_opt_valid(struct bt_conn *conn, enum bt_att_chan_opt chan_opt)
 {
+	if (!IS_ENABLED(CONFIG_BT_EATT)) {
+		return false;
+	}
+
 	if ((chan_opt & (BT_ATT_CHAN_OPT_ENHANCED_ONLY | BT_ATT_CHAN_OPT_UNENHANCED_ONLY)) ==
 	    (BT_ATT_CHAN_OPT_ENHANCED_ONLY | BT_ATT_CHAN_OPT_UNENHANCED_ONLY)) {
 		/* Enhanced and Unenhanced are mutually exclusive */
