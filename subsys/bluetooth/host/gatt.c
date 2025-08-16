@@ -1610,7 +1610,9 @@ submit:
 
 void bt_gatt_cb_register(struct bt_gatt_cb *cb)
 {
-	sys_slist_append(&callback_list, &cb->node);
+	if (IS_ENABLED(CONFIG_BT_GATT_CALLBACKS)) {
+		sys_slist_append(&callback_list, &cb->node);
+	}
 }
 
 #if defined(CONFIG_BT_GATT_DYNAMIC_DB)
@@ -6005,11 +6007,13 @@ void bt_gatt_connected(struct bt_conn *conn)
 
 void bt_gatt_att_max_mtu_changed(struct bt_conn *conn, uint16_t tx, uint16_t rx)
 {
-	struct bt_gatt_cb *cb;
+	if (IS_ENABLED(CONFIG_BT_GATT_CALLBACKS)) {
+		struct bt_gatt_cb *cb;
 
-	SYS_SLIST_FOR_EACH_CONTAINER(&callback_list, cb, node) {
-		if (cb->att_mtu_updated) {
-			cb->att_mtu_updated(conn, tx, rx);
+		SYS_SLIST_FOR_EACH_CONTAINER(&callback_list, cb, node) {
+			if (cb->att_mtu_updated) {
+				cb->att_mtu_updated(conn, tx, rx);
+			}
 		}
 	}
 }

@@ -1129,7 +1129,7 @@ static void process_unack_tx(struct bt_conn *conn)
 	}
 }
 
-struct bt_conn *conn_lookup_handle(struct bt_conn *conns, size_t size,
+static struct bt_conn *conn_lookup_handle(struct bt_conn *conns, size_t size,
 				   uint16_t handle)
 {
 	int i;
@@ -1950,7 +1950,7 @@ static void notify_disconnected(struct bt_conn *conn)
 }
 
 #if defined(CONFIG_BT_REMOTE_INFO)
-void notify_remote_info(struct bt_conn *conn)
+void bt_conn_notify_remote_info(struct bt_conn *conn)
 {
 	struct bt_conn_remote_info remote_info;
 	int err;

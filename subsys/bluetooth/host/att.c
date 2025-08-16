@@ -84,7 +84,7 @@ NET_BUF_POOL_DEFINE(prep_pool, CONFIG_BT_ATT_PREPARE_COUNT, BT_ATT_BUF_SIZE,
 		    sizeof(struct bt_attr_data), NULL);
 #endif /* CONFIG_BT_ATT_PREPARE_COUNT */
 
-K_MEM_SLAB_DEFINE(req_slab, sizeof(struct bt_att_req),
+K_MEM_SLAB_DEFINE_STATIC(req_slab, sizeof(struct bt_att_req),
 		  CONFIG_BT_ATT_TX_COUNT, __alignof__(struct bt_att_req));
 
 enum {
@@ -175,9 +175,9 @@ struct bt_att {
 #endif /* CONFIG_BT_EATT */
 };
 
-K_MEM_SLAB_DEFINE(att_slab, sizeof(struct bt_att),
+K_MEM_SLAB_DEFINE_STATIC(att_slab, sizeof(struct bt_att),
 		  CONFIG_BT_MAX_CONN, __alignof__(struct bt_att));
-K_MEM_SLAB_DEFINE(chan_slab, sizeof(struct bt_att_chan),
+K_MEM_SLAB_DEFINE_STATIC(chan_slab, sizeof(struct bt_att_chan),
 		  CONFIG_BT_MAX_CONN * ATT_CHAN_MAX,
 		  __alignof__(struct bt_att_chan));
 static struct bt_att_req cancel;
@@ -198,7 +198,7 @@ static k_tid_t att_handle_rsp_thread;
 
 static struct bt_att_tx_meta_data tx_meta_data_storage[CONFIG_BT_ATT_TX_COUNT];
 
-struct bt_att_tx_meta_data *bt_att_get_tx_meta_data(const struct net_buf *buf);
+static struct bt_att_tx_meta_data *bt_att_get_tx_meta_data(const struct net_buf *buf);
 static void att_on_sent_cb(struct bt_att_tx_meta_data *meta);
 
 #if defined(CONFIG_BT_ATT_ERR_TO_STR)
@@ -293,7 +293,7 @@ NET_BUF_POOL_DEFINE(att_pool, CONFIG_BT_ATT_TX_COUNT,
 		    BT_L2CAP_SDU_BUF_SIZE(BT_ATT_BUF_SIZE),
 		    CONFIG_BT_CONN_TX_USER_DATA_SIZE, att_tx_destroy);
 
-struct bt_att_tx_meta_data *bt_att_get_tx_meta_data(const struct net_buf *buf)
+static struct bt_att_tx_meta_data *bt_att_get_tx_meta_data(const struct net_buf *buf)
 {
 	__ASSERT_NO_MSG(net_buf_pool_get(buf->pool_id) == &att_pool);
 
@@ -308,7 +308,7 @@ static int bt_att_chan_send(struct bt_att_chan *chan, struct net_buf *buf);
 static void att_chan_mtu_updated(struct bt_att_chan *updated_chan);
 static void bt_att_disconnected(struct bt_l2cap_chan *chan);
 
-struct net_buf *bt_att_create_rsp_pdu(struct bt_att_chan *chan, uint8_t op);
+static struct net_buf *bt_att_create_rsp_pdu(struct bt_att_chan *chan, uint8_t op);
 
 static void att_disconnect(struct bt_att_chan *chan)
 {
@@ -3124,7 +3124,7 @@ struct net_buf *bt_att_create_pdu(struct bt_conn *conn, uint8_t op, size_t len)
 #endif /* CONFIG_BT_EATT */
 }
 
-struct net_buf *bt_att_create_rsp_pdu(struct bt_att_chan *chan, uint8_t op)
+static struct net_buf *bt_att_create_rsp_pdu(struct bt_att_chan *chan, uint8_t op)
 {
 	size_t headroom;
 	struct bt_att_hdr *hdr;
@@ -3932,16 +3932,15 @@ void bt_att_init(void)
 
 uint16_t bt_att_get_mtu(struct bt_conn *conn)
 {
+#if defined(CONFIG_BT_EATT)
 	struct bt_att *att;
+	struct bt_att_chan *chan, *tmp;
+	uint16_t mtu = 0;
 
 	att = att_get(conn);
 	if (!att) {
 		return 0;
 	}
-
-#if defined(CONFIG_BT_EATT)
-	__maybe_unused struct bt_att_chan *chan, *tmp;
-	uint16_t mtu = 0;
 
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&att->chans, chan, tmp, node) {
 		if (bt_att_mtu(chan) > mtu) {
