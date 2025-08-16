@@ -104,6 +104,8 @@ enum gatt_global_flags {
 
 static ATOMIC_DEFINE(gatt_flags, GATT_NUM_FLAGS);
 
+static int bt_gatt_store_ccc(uint8_t id, const bt_addr_le_t *addr);
+
 static ssize_t read_name(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 			 void *buf, uint16_t len, uint16_t offset)
 {
@@ -1608,12 +1610,12 @@ submit:
 #endif /* BT_GATT_DYNAMIC_DB || (BT_GATT_CACHING && BT_SETTINGS) */
 }
 
+#if defined(CONFIG_BT_GATT_CALLBACKS)
 void bt_gatt_cb_register(struct bt_gatt_cb *cb)
 {
-	if (IS_ENABLED(CONFIG_BT_GATT_CALLBACKS)) {
-		sys_slist_append(&callback_list, &cb->node);
-	}
+	sys_slist_append(&callback_list, &cb->node);
 }
+#endif
 
 #if defined(CONFIG_BT_GATT_DYNAMIC_DB)
 static void db_changed(void)
@@ -6155,7 +6157,7 @@ static uint8_t ccc_save(const struct bt_gatt_attr *attr, uint16_t handle,
 	return BT_GATT_ITER_CONTINUE;
 }
 
-int bt_gatt_store_ccc(uint8_t id, const bt_addr_le_t *addr)
+static int bt_gatt_store_ccc(uint8_t id, const bt_addr_le_t *addr)
 {
 	struct ccc_save save;
 	size_t len;
