@@ -2800,15 +2800,8 @@ static uint8_t legacy_pairing_rsp(struct bt_smp *smp)
 }
 #endif /* CONFIG_BT_CENTRAL */
 #else
-static uint8_t smp_encrypt_info(struct bt_smp *smp, struct net_buf *buf)
-{
-	return BT_SMP_ERR_CMD_NOTSUPP;
-}
-
-static uint8_t smp_central_ident(struct bt_smp *smp, struct net_buf *buf)
-{
-	return BT_SMP_ERR_CMD_NOTSUPP;
-}
+#define smp_encrypt_info smp_cmd_not_supported
+#define smp_central_ident smp_cmd_not_supported
 #endif /* !CONFIG_BT_SMP_SC_PAIR_ONLY */
 
 static int smp_init(struct bt_smp *smp)
@@ -3047,6 +3040,11 @@ bool bt_smp_request_ltk(struct bt_conn *conn, uint64_t rand, uint16_t ediv, uint
 	return false;
 }
 
+__maybe_unused static uint8_t smp_cmd_not_supported(struct bt_smp *smp, struct net_buf *buf)
+{
+	return BT_SMP_ERR_CMD_NOTSUPP;
+}
+
 #if defined(CONFIG_BT_PERIPHERAL)
 static int smp_send_security_req(struct bt_conn *conn)
 {
@@ -3259,10 +3257,7 @@ static uint8_t smp_pairing_req(struct bt_smp *smp, struct net_buf *buf)
 	return send_pairing_rsp(smp);
 }
 #else
-static uint8_t smp_pairing_req(struct bt_smp *smp, struct net_buf *buf)
-{
-	return BT_SMP_ERR_CMD_NOTSUPP;
-}
+#define smp_pairing_req smp_cmd_not_supported
 #endif /* CONFIG_BT_PERIPHERAL */
 
 static uint8_t sc_send_public_key(struct bt_smp *smp)
@@ -3507,10 +3502,7 @@ static uint8_t smp_pairing_rsp(struct bt_smp *smp, struct net_buf *buf)
 	return sc_send_public_key(smp);
 }
 #else
-static uint8_t smp_pairing_rsp(struct bt_smp *smp, struct net_buf *buf)
-{
-	return BT_SMP_ERR_CMD_NOTSUPP;
-}
+#define smp_pairing_rsp smp_cmd_not_supported
 #endif /* CONFIG_BT_CENTRAL */
 
 static uint8_t smp_pairing_confirm(struct bt_smp *smp, struct net_buf *buf)
@@ -4269,10 +4261,7 @@ static uint8_t smp_signing_info(struct bt_smp *smp, struct net_buf *buf)
 	return 0;
 }
 #else
-static uint8_t smp_signing_info(struct bt_smp *smp, struct net_buf *buf)
-{
-	return BT_SMP_ERR_CMD_NOTSUPP;
-}
+#define smp_signing_info smp_cmd_not_supported
 #endif /* CONFIG_BT_SIGNING */
 
 #if defined(CONFIG_BT_CENTRAL)
@@ -4377,10 +4366,7 @@ pair:
 	return 0;
 }
 #else
-static uint8_t smp_security_request(struct bt_smp *smp, struct net_buf *buf)
-{
-	return BT_SMP_ERR_CMD_NOTSUPP;
-}
+#define smp_security_request smp_cmd_not_supported
 #endif /* CONFIG_BT_CENTRAL */
 
 __maybe_unused static uint8_t generate_dhkey(struct bt_smp *smp)
