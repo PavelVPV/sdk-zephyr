@@ -5163,16 +5163,6 @@ int bt_smp_sign(struct bt_conn *conn, struct net_buf *buf)
 
 	return 0;
 }
-#else
-int bt_smp_sign_verify(struct bt_conn *conn, struct net_buf *buf)
-{
-	return -ENOTSUP;
-}
-
-int bt_smp_sign(struct bt_conn *conn, struct net_buf *buf)
-{
-	return -ENOTSUP;
-}
 #endif /* CONFIG_BT_SIGNING */
 
 static int smp_d1(const uint8_t *key, uint16_t d, uint16_t r, uint8_t res[16])

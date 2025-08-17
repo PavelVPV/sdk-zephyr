@@ -420,12 +420,17 @@ static int chan_send(struct bt_att_chan *chan, struct net_buf *buf)
 	}
 
 	if (hdr->code == BT_ATT_OP_SIGNED_WRITE_CMD) {
+#if defined(CONFIG_BT_SIGNING)
 		err = bt_smp_sign(chan->att->conn, buf);
 		if (err) {
 			LOG_ERR("Error signing data");
 			net_buf_unref(buf);
 			return err;
 		}
+#else
+		/* GATT shall never send signed write if CONFIG_BT_SIGNING is disabled. */
+		__ASSERT_NO_MSG(false);
+#endif
 	}
 
 	net_buf_simple_save(&buf->b, &state);

@@ -5113,6 +5113,10 @@ int bt_gatt_write_without_response_cb(struct bt_conn *conn, uint16_t handle,
 	}
 #endif
 
+	if (!IS_ENABLED(CONFIG_BT_SIGNING) && sign) {
+		return -ENOTSUP;
+	}
+
 	if (sign) {
 		buf = bt_att_create_pdu(conn, BT_ATT_OP_SIGNED_WRITE_CMD,
 					sizeof(*cmd) + length + 12);
