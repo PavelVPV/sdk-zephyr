@@ -291,7 +291,9 @@ static struct bt_smp_br bt_smp_br_pool[CONFIG_BT_MAX_CONN];
 static struct bt_smp bt_smp_pool[CONFIG_BT_MAX_CONN];
 static bool bondable = IS_ENABLED(CONFIG_BT_BONDABLE);
 static bool sc_oobd_present;
+#if !defined(CONFIG_BT_SMP_SC_PAIR_ONLY)
 static bool legacy_oobd_present;
+#endif
 static bool sc_supported;
 static const uint8_t *sc_public_key;
 
@@ -2847,10 +2849,13 @@ void bt_le_oob_set_sc_flag(bool enable)
 	sc_oobd_present = enable;
 }
 
+#if !defined(CONFIG_BT_SMP_SC_PAIR_ONLY)
 void bt_le_oob_set_legacy_flag(bool enable)
 {
 	legacy_oobd_present = enable;
+
 }
+#endif /* CONFIG_BT_SMP_SC_PAIR_ONLY */
 
 static uint8_t get_auth(struct bt_smp *smp, uint8_t auth)
 {
@@ -3172,8 +3177,12 @@ static uint8_t smp_pairing_req(struct bt_smp *smp, struct net_buf *buf)
 		rsp->oob_flag = sc_oobd_present ? BT_SMP_OOB_PRESENT :
 				BT_SMP_OOB_NOT_PRESENT;
 	} else {
+#if !defined(CONFIG_BT_SMP_SC_PAIR_ONLY)
 		rsp->oob_flag = legacy_oobd_present ? BT_SMP_OOB_PRESENT :
 				BT_SMP_OOB_NOT_PRESENT;
+#else
+		rsp->oob_flag = BT_SMP_OOB_NOT_PRESENT;
+#endif
 	}
 
 	if ((rsp->auth_req & BT_SMP_AUTH_CT2) &&
@@ -3346,7 +3355,11 @@ static int smp_send_pairing_req(struct bt_conn *conn)
 	 * set OOB flag if any OOB data is present and assume to peer device
 	 * provides OOB data that will match it's pairing type.
 	 */
-	req->oob_flag = (legacy_oobd_present || sc_oobd_present) ?
+	req->oob_flag = (
+#if !defined(CONFIG_BT_SMP_SC_PAIR_ONLY)
+			 legacy_oobd_present ||
+#endif
+			 sc_oobd_present) ?
 				BT_SMP_OOB_PRESENT : BT_SMP_OOB_NOT_PRESENT;
 
 	req->max_key_size = BT_SMP_MAX_ENC_KEY_SIZE;
