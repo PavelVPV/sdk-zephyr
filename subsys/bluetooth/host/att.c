@@ -2554,6 +2554,11 @@ static uint8_t att_signed_write_cmd(struct bt_att_chan *chan, struct net_buf *bu
 }
 #endif /* CONFIG_BT_SIGNING */
 
+__maybe_unused static uint8_t att_handle_common_rsp(struct bt_att_chan *chan, struct net_buf *buf)
+{
+	return att_handle_rsp(chan, buf->data, buf->len, 0);
+}
+
 #if defined(CONFIG_BT_GATT_CLIENT)
 #if defined(CONFIG_BT_ATT_RETRY_ON_SEC_ERR)
 static int att_change_security(struct bt_conn *conn, uint8_t err)
@@ -2667,6 +2672,7 @@ done:
 	return att_handle_rsp(chan, NULL, 0, err);
 }
 
+#if defined(CONFIG_BT_ATT_LOG_LEVEL_DBG)
 static uint8_t att_handle_find_info_rsp(struct bt_att_chan *chan,
 				     struct net_buf *buf)
 {
@@ -2706,8 +2712,16 @@ static uint8_t att_handle_read_blob_rsp(struct bt_att_chan *chan,
 
 	return att_handle_rsp(chan, buf->data, buf->len, 0);
 }
+#else
+#define att_handle_find_info_rsp att_handle_common_rsp
+#define att_handle_find_type_rsp att_handle_common_rsp
+#define att_handle_read_type_rsp att_handle_common_rsp
+#define att_handle_read_rsp att_handle_common_rsp
+#define att_handle_read_blob_rsp att_handle_common_rsp
+#endif /* CONFIG_BT_ATT_LOG_LEVEL_DBG */
 
 #if defined(CONFIG_BT_GATT_READ_MULTIPLE)
+#if defined(CONFIG_BT_ATT_LOG_LEVEL_DBG)
 static uint8_t att_handle_read_mult_rsp(struct bt_att_chan *chan,
 				     struct net_buf *buf)
 {
@@ -2715,10 +2729,13 @@ static uint8_t att_handle_read_mult_rsp(struct bt_att_chan *chan,
 
 	return att_handle_rsp(chan, buf->data, buf->len, 0);
 }
-
+#else
+#define att_handle_read_mult_rsp att_handle_common_rsp
+#endif /* CONFIG_BT_ATT_LOG_LEVEL_DBG */
 #endif /* CONFIG_BT_GATT_READ_MULTIPLE */
 
 #if defined(CONFIG_BT_GATT_READ_MULT_VAR_LEN)
+#if defined(CONFIG_BT_ATT_LOG_LEVEL_DBG)
 static uint8_t att_handle_read_mult_vl_rsp(struct bt_att_chan *chan,
 					struct net_buf *buf)
 {
@@ -2726,8 +2743,12 @@ static uint8_t att_handle_read_mult_vl_rsp(struct bt_att_chan *chan,
 
 	return att_handle_rsp(chan, buf->data, buf->len, 0);
 }
+#else
+#define att_handle_read_mult_vl_rsp att_handle_common_rsp
+#endif /* CONFIG_BT_ATT_LOG_LEVEL_DBG */
 #endif /* CONFIG_BT_GATT_READ_MULT_VAR_LEN */
 
+#if defined(CONFIG_BT_ATT_LOG_LEVEL_DBG)
 static uint8_t att_handle_read_group_rsp(struct bt_att_chan *chan,
 				      struct net_buf *buf)
 {
@@ -2759,6 +2780,12 @@ static uint8_t att_handle_exec_write_rsp(struct bt_att_chan *chan,
 
 	return att_handle_rsp(chan, buf->data, buf->len, 0);
 }
+#else
+#define att_handle_read_group_rsp att_handle_common_rsp
+#define att_handle_write_rsp att_handle_common_rsp
+#define att_handle_prepare_write_rsp att_handle_common_rsp
+#define att_handle_exec_write_rsp att_handle_common_rsp
+#endif /* CONFIG_BT_ATT_LOG_LEVEL_DBG */
 
 static uint8_t att_notify(struct bt_att_chan *chan, struct net_buf *buf)
 {
@@ -2803,12 +2830,16 @@ static uint8_t att_notify_mult(struct bt_att_chan *chan, struct net_buf *buf)
 }
 #endif /* CONFIG_BT_GATT_CLIENT */
 
+#if defined(CONFIG_BT_ATT_LOG_LEVEL_DBG)
 static uint8_t att_confirm(struct bt_att_chan *chan, struct net_buf *buf)
 {
 	LOG_DBG("");
 
 	return att_handle_rsp(chan, buf->data, buf->len, 0);
 }
+#else
+#define att_confirm att_handle_common_rsp
+#endif /* CONFIG_BT_ATT_LOG_LEVEL_DBG */
 
 static const struct att_handler {
 	uint8_t       op;
