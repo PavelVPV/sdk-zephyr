@@ -1224,12 +1224,12 @@ static uint8_t find_type_cb(const struct bt_gatt_attr *attr, uint16_t handle,
 	size_t len;
 
 	/* Skip secondary services */
-	if (!bt_uuid_cmp(attr->uuid, BT_UUID_GATT_SECONDARY)) {
+	if (!bt_uuid_cmp(attr->uuid, bt_gatt_uuid_secondary)) {
 		goto skip;
 	}
 
 	/* Update group end_handle if not a primary service */
-	if (bt_uuid_cmp(attr->uuid, BT_UUID_GATT_PRIMARY)) {
+	if (bt_uuid_cmp(attr->uuid, bt_gatt_uuid_primary)) {
 		if (data->group &&
 		    handle > sys_le16_to_cpu(data->group->end_handle)) {
 			data->group->end_handle = sys_cpu_to_le16(handle);
@@ -1370,7 +1370,7 @@ static uint8_t att_find_type_req(struct bt_att_chan *chan, struct net_buf *buf)
 	 * and the Attribute Value set to the 16-bit Bluetooth UUID or 128-bit
 	 * UUID for the specific primary service.
 	 */
-	if (bt_uuid_cmp(BT_UUID_DECLARE_16(type), BT_UUID_GATT_PRIMARY)) {
+	if (bt_uuid_cmp(BT_UUID_DECLARE_16(type), bt_gatt_uuid_primary)) {
 		send_err_rsp(chan, BT_ATT_OP_FIND_TYPE_REQ, start_handle,
 			     BT_ATT_ERR_ATTRIBUTE_NOT_FOUND);
 		return 0;
@@ -1638,8 +1638,8 @@ static uint8_t att_read_type_req(struct bt_att_chan *chan, struct net_buf *buf)
 	 * (Core Specification 5.4 Vol 3. Part G. 2.5.2.1 Robust Caching).
 	 */
 	if (!bt_gatt_change_aware(chan->chan.chan.conn, true)) {
-		if (bt_uuid_cmp(&u.uuid, BT_UUID_GATT_INCLUDE) != 0 &&
-		    bt_uuid_cmp(&u.uuid, BT_UUID_GATT_CHRC) != 0 &&
+		if (bt_uuid_cmp(&u.uuid, bt_gatt_uuid_include) != 0 &&
+		    bt_uuid_cmp(&u.uuid, bt_gatt_uuid_chrc) != 0 &&
 		    (start_handle != BT_ATT_FIRST_ATTRIBUTE_HANDLE ||
 		     end_handle != BT_ATT_LAST_ATTRIBUTE_HANDLE)) {
 			if (!atomic_test_and_set_bit(chan->flags, ATT_OUT_OF_SYNC_SENT)) {
@@ -1963,8 +1963,8 @@ static uint8_t read_group_cb(const struct bt_gatt_attr *attr, uint16_t handle,
 	int read;
 
 	/* Update group end_handle if attribute is not a service */
-	if (bt_uuid_cmp(attr->uuid, BT_UUID_GATT_PRIMARY) &&
-	    bt_uuid_cmp(attr->uuid, BT_UUID_GATT_SECONDARY)) {
+	if (bt_uuid_cmp(attr->uuid, bt_gatt_uuid_primary) &&
+	    bt_uuid_cmp(attr->uuid, bt_gatt_uuid_secondary)) {
 		if (data->group &&
 		    handle > sys_le16_to_cpu(data->group->end_handle)) {
 			data->group->end_handle = sys_cpu_to_le16(handle);
@@ -2083,8 +2083,8 @@ static uint8_t att_read_group_req(struct bt_att_chan *chan, struct net_buf *buf)
 	 * Request. The "Characteristic" grouping type shall not be used in
 	 * the ATT Read By Group Type Request.
 	 */
-	if (bt_uuid_cmp(&u.uuid, BT_UUID_GATT_PRIMARY) &&
-	    bt_uuid_cmp(&u.uuid, BT_UUID_GATT_SECONDARY)) {
+	if (bt_uuid_cmp(&u.uuid, bt_gatt_uuid_primary) &&
+	    bt_uuid_cmp(&u.uuid, bt_gatt_uuid_secondary)) {
 		send_err_rsp(chan, BT_ATT_OP_READ_GROUP_REQ, start_handle,
 			     BT_ATT_ERR_UNSUPPORTED_GROUP_TYPE);
 		return 0;

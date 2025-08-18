@@ -35,6 +35,15 @@
 						BT_GATT_PERM_READ_AUTHEN | \
 						BT_GATT_PERM_READ_LESC)
 
+extern const struct bt_uuid *bt_gatt_uuid_ccc;
+extern const struct bt_uuid *bt_gatt_uuid_chrc;
+extern const struct bt_uuid *bt_gatt_uuid_primary;
+extern const struct bt_uuid *bt_gatt_uuid_secondary;
+extern const struct bt_uuid *bt_gatt_uuid_include;
+extern const struct bt_uuid *bt_gatt_uuid_cep;
+extern const struct bt_uuid *bt_gatt_uuid_scc;
+extern const struct bt_uuid *bt_gatt_uuid_cpf;
+
 void bt_gatt_init(void);
 void bt_gatt_connected(struct bt_conn *conn);
 void bt_gatt_att_max_mtu_changed(struct bt_conn *conn, uint16_t tx, uint16_t rx);
