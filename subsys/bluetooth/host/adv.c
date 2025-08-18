@@ -185,7 +185,7 @@ static uint8_t ad_stream_read(struct ad_stream *stream, uint8_t *buf, uint8_t bu
 	return read_len;
 }
 
-enum adv_name_type get_adv_name_type(const struct bt_le_ext_adv *adv)
+static enum adv_name_type get_adv_name_type(const struct bt_le_ext_adv *adv)
 {
 	if (atomic_test_bit(adv->flags, BT_ADV_INCLUDE_NAME_SD)) {
 		return ADV_NAME_TYPE_SD;
@@ -198,7 +198,7 @@ enum adv_name_type get_adv_name_type(const struct bt_le_ext_adv *adv)
 	return ADV_NAME_TYPE_NONE;
 }
 
-enum adv_name_type get_adv_name_type_param(const struct bt_le_adv_param *param)
+static enum adv_name_type get_adv_name_type_param(const struct bt_le_adv_param *param)
 {
 	if (param->options & BT_LE_ADV_OPT_USE_NAME) {
 		if (param->options & BT_LE_ADV_OPT_FORCE_NAME_IN_AD) {
