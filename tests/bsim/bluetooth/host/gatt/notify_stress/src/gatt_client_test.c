@@ -165,7 +165,10 @@ static void gatt_discover(enum bt_att_chan_opt opt)
 	discover_params.start_handle = BT_ATT_FIRST_ATTRIBUTE_HANDLE;
 	discover_params.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE;
 	discover_params.type = BT_GATT_DISCOVER_PRIMARY;
+
+#if defined(CONFIG_BT_EATT)
 	discover_params.chan_opt = opt;
+#endif
 
 	err = bt_gatt_discover(g_conn, &discover_params);
 	if (err != 0) {
@@ -204,7 +207,18 @@ uint8_t test_notify(struct bt_conn *conn, struct bt_gatt_subscribe_params *param
 	printk("Received notification #%u with length %d\n", num_notifications++, length);
 
 	/* This causes ACL data drop in HCI IPC driver. */
-	k_sleep(K_MSEC(1000));
+	k_sleep(K_MSEC(10));
+
+	struct bt_conn_le_tx_power power_level = {0};
+
+	/* The auto-initiated procedure should generate enough events to occupy all buffers from
+	 * the pool and cause a deadlock here as Command Complete upon getting the TX Power Level
+	 * will not be received.
+	 */
+	int err = bt_conn_le_get_tx_power_level(conn, &power_level);
+	TEST_ASSERT(err == 0, "Failed get tx power level (err %d)", err);
+
+	printk("TX Power Level: %d dBm\n", power_level.current_level);
 
 	return BT_GATT_ITER_CONTINUE;
 }
@@ -225,7 +239,9 @@ static void gatt_subscribe_long(enum bt_att_chan_opt opt)
 
 	UNSET_FLAG(flag_long_subscribed);
 	sub_params_long.value_handle = long_chrc_handle;
+#if defined(CONFIG_BT_EATT)
 	sub_params_long.chan_opt = opt;
+#endif
 	err = bt_gatt_subscribe(g_conn, &sub_params_long);
 	if (err < 0) {
 		TEST_FAIL("Failed to subscribe");
@@ -240,13 +256,38 @@ static void gatt_unsubscribe_long(enum bt_att_chan_opt opt)
 
 	UNSET_FLAG(flag_long_subscribed);
 	sub_params_long.value_handle = long_chrc_handle;
+#if defined(CONFIG_BT_EATT)
 	sub_params_long.chan_opt = opt;
+#endif
 	err = bt_gatt_unsubscribe(g_conn, &sub_params_long);
 	if (err < 0) {
 		TEST_FAIL("Failed to unsubscribe");
 	} else {
 		printk("Unsubscribe request sent\n");
 	}
+}
+
+static void att_mtu_updated(struct bt_conn *conn, uint16_t tx, uint16_t rx)
+{
+	printk("MTU updated: TX %u RX %u\n", tx, rx);
+}
+
+static struct bt_gatt_cb gatt_cb = {
+	.att_mtu_updated = att_mtu_updated,
+};
+
+DEFINE_FLAG_STATIC(flag_mtu_exchange);
+
+static void exchange_mtu_complete(struct bt_conn *conn, uint8_t err,
+		     struct bt_gatt_exchange_params *params)
+{
+	if (err) {
+		TEST_FAIL("MTU exchange failed (err %d)", err);
+	} else {
+		printk("MTU exchange completed\n");
+	}
+
+	SET_FLAG(flag_mtu_exchange);
 }
 
 static void setup(void)
@@ -257,6 +298,8 @@ static void setup(void)
 	if (err != 0) {
 		TEST_FAIL("Bluetooth discover failed (err %d)", err);
 	}
+
+	bt_gatt_cb_register(&gatt_cb);
 
 	err = bt_le_scan_start(BT_LE_SCAN_PASSIVE, device_found);
 	if (err != 0) {
@@ -274,11 +317,24 @@ static void setup(void)
 
 	WAIT_FOR_FLAG(flag_is_encrypted);
 
+#if 0
 	while (bt_eatt_count(g_conn) < CONFIG_BT_EATT_MAX) {
 		k_sleep(K_MSEC(10));
 	}
 
 	printk("EATT connected\n");
+#endif
+
+	struct bt_gatt_exchange_params params = {
+		.func = exchange_mtu_complete,
+	};
+
+	err = bt_gatt_exchange_mtu(g_conn, &params);
+	if (err != 0) {
+		TEST_FAIL("MTU exchange failed to start (err %d)", err);
+	}
+
+	WAIT_FOR_FLAG(flag_mtu_exchange);
 }
 
 static void test_main_client(void)

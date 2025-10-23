@@ -113,7 +113,9 @@ static void notify(void)
 		.func = notification_sent,
 		.user_data = &length,
 		.uuid = NULL,
+#if defined(CONFIG_BT_EATT)
 		.chan_opt = BT_ATT_CHAN_OPT_ENHANCED_ONLY,
+#endif
 	};
 	int err;
 
@@ -131,6 +133,18 @@ static void notify(void)
 	} while (err);
 }
 
+DEFINE_FLAG_STATIC(flag_mtu_exchange);
+
+static void att_mtu_updated(struct bt_conn *conn, uint16_t tx, uint16_t rx)
+{
+	printk("MTU updated: TX %u RX %u\n", tx, rx);
+	SET_FLAG(flag_mtu_exchange);
+}
+
+static struct bt_gatt_cb gatt_cb = {
+	.att_mtu_updated = att_mtu_updated,
+};
+
 static void setup(void)
 {
 	int err;
@@ -146,6 +160,8 @@ static void setup(void)
 
 	printk("Bluetooth initialized\n");
 
+	bt_gatt_cb_register(&gatt_cb);
+
 	err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), NULL, 0);
 	if (err != 0) {
 		TEST_FAIL("Advertising failed to start (err %d)", err);
@@ -156,11 +172,13 @@ static void setup(void)
 
 	WAIT_FOR_FLAG(flag_is_connected);
 
+#if 0
 	while (bt_eatt_count(g_conn) < CONFIG_BT_EATT_MAX) {
 		k_sleep(K_MSEC(100));
 	}
 	printk("EATT connected\n");
-
+#endif
+	WAIT_FOR_FLAG(flag_mtu_exchange);
 	WAIT_FOR_FLAG(flag_subscribe);
 }
 
