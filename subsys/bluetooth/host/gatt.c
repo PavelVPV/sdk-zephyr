@@ -1634,7 +1634,7 @@ static void db_changed(void)
 #if defined(CONFIG_BT_GATT_CACHING)
 	struct bt_conn *conn;
 	int i;
-
+	LOG_ERR("DB changed");
 	atomic_clear_bit(gatt_sc.flags, DB_HASH_VALID);
 
 	if (IS_ENABLED(CONFIG_BT_LONG_WQ)) {
