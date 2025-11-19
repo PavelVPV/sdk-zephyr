@@ -43,7 +43,7 @@
 #include "l2cap_internal.h"
 #include "smp.h"
 
-#define LOG_LEVEL CONFIG_BT_ATT_LOG_LEVEL
+#define LOG_LEVEL 4//CONFIG_BT_ATT_LOG_LEVEL
 LOG_MODULE_REGISTER(bt_att);
 
 #define ATT_CHAN(_ch) CONTAINER_OF(_ch, struct bt_att_chan, chan.chan)
@@ -1344,7 +1344,7 @@ static uint8_t att_find_type_req(struct bt_att_chan *chan, struct net_buf *buf)
 
 static uint8_t err_to_att(int err)
 {
-	LOG_DBG("%d", err);
+	LOG_ERR("err_to_att: %d", err);
 
 	if (err < 0 && err >= -0xff) {
 		return -err;
@@ -2128,11 +2128,14 @@ static uint8_t att_write_rsp(struct bt_att_chan *chan, uint8_t req, uint8_t rsp,
 	struct write_data data;
 
 	if (!bt_gatt_change_aware(chan->att->conn, req ? true : false)) {
+		LOG_INF("Device is change-unaware. Out-of-sync: %d", atomic_test_bit(chan->flags, ATT_OUT_OF_SYNC_SENT));
 		if (!atomic_test_and_set_bit(chan->flags, ATT_OUT_OF_SYNC_SENT)) {
 			return BT_ATT_ERR_DB_OUT_OF_SYNC;
 		} else {
 			return 0;
 		}
+	} else {
+		LOG_INF("Device is change-aware. Out-of-sync: %d", atomic_test_bit(chan->flags, ATT_OUT_OF_SYNC_SENT));
 	}
 
 	if (!handle) {

@@ -57,7 +57,7 @@
 #include "settings.h"
 #include "smp.h"
 
-#define LOG_LEVEL CONFIG_BT_GATT_LOG_LEVEL
+#define LOG_LEVEL 4//CONFIG_BT_GATT_LOG_LEVEL
 LOG_MODULE_REGISTER(bt_gatt);
 
 #define SC_TIMEOUT	K_MSEC(10)
@@ -544,6 +544,9 @@ static void clear_cf_cfg(struct gatt_cf_cfg *cfg)
 	bt_addr_le_copy(&cfg->peer, BT_ADDR_LE_ANY);
 	memset(cfg->data, 0, sizeof(cfg->data));
 	atomic_set(cfg->flags, 0);
+
+	cfg->data[0] |= BIT(CF_BIT_ROBUST_CACHING);
+	atomic_set_bit(cfg->flags, CF_CHANGE_AWARE);
 }
 
 enum delayed_store_flags {
@@ -676,6 +679,8 @@ static ssize_t cf_write(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 {
 	struct gatt_cf_cfg *cfg;
 	const uint8_t *value = buf;
+
+	LOG_WRN("Updating Client Supported Features");
 
 	if (offset > sizeof(cfg->data)) {
 		return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
@@ -924,8 +929,11 @@ static void do_db_hash(void)
 {
 	bool new_hash = !atomic_test_bit(gatt_sc.flags, DB_HASH_VALID);
 
+	LOG_INF("Generating Database Hash. New hash: %d", new_hash);
+
 	if (new_hash) {
 		db_hash_gen();
+		LOG_INF("Database Hash generated");
 	}
 
 #if defined(CONFIG_BT_SETTINGS)
@@ -933,6 +941,11 @@ static void do_db_hash(void)
 		atomic_test_bit(gatt_sc.flags, DB_HASH_LOAD);
 	bool already_processed =
 		atomic_test_bit(gatt_sc.flags, DB_HASH_LOAD_PROC);
+
+	LOG_INF("Hash loaded from settings: %s",
+		hash_loaded_from_settings ? "yes" : "no");
+	LOG_INF("Hash already processed: %s",
+		already_processed ? "yes" : "no");
 
 	if (!hash_loaded_from_settings) {
 		/* we want to generate the hash, but not overwrite the hash
@@ -1386,7 +1399,10 @@ static void sc_process(struct k_work *work)
 	sc->params.chan_opt = BT_ATT_CHAN_OPT_NONE;
 #endif /* CONFIG_BT_EATT */
 
+	LOG_INF("Sending SC indication");
+
 	if (bt_gatt_indicate(NULL, &sc->params)) {
+		LOG_ERR("Failed to send SC indication");
 		/* No connections to indicate */
 		return;
 	}
@@ -1594,6 +1610,10 @@ void bt_gatt_init(void)
 	 */
 	bt_conn_auth_info_cb_register(&gatt_conn_auth_info_cb);
 #endif /* CONFIG_BT_SETTINGS && CONFIG_BT_SMP */
+
+	for (int i = 0; i < ARRAY_SIZE(cf_cfg); i++) {
+		cf_cfg[i].data[0] |= BIT(CF_BIT_ROBUST_CACHING);
+	}
 }
 
 static void sc_indicate(uint16_t start, uint16_t end)
@@ -1634,7 +1654,7 @@ static void db_changed(void)
 #if defined(CONFIG_BT_GATT_CACHING)
 	struct bt_conn *conn;
 	int i;
-	LOG_ERR("DB changed");
+
 	atomic_clear_bit(gatt_sc.flags, DB_HASH_VALID);
 
 	if (IS_ENABLED(CONFIG_BT_LONG_WQ)) {
@@ -2233,6 +2253,8 @@ ssize_t bt_gatt_attr_write_ccc(struct bt_conn *conn,
 	struct bt_gatt_ccc_cfg *cfg;
 	bool value_changed;
 	uint16_t value;
+
+	LOG_INF("Changing CCCD handle 0x%04x offset %u len %u", attr->handle, offset, len);
 
 	if (offset) {
 		return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
@@ -6019,6 +6041,15 @@ void bt_gatt_connected(struct bt_conn *conn)
 		LOG_WRN("MTU Exchange failed (err %d)", err);
 	}
 #endif /* CONFIG_BT_GATT_AUTO_UPDATE_MTU */
+
+	struct gatt_cf_cfg* cfg = find_cf_cfg(NULL);
+	if (!cfg) {
+		LOG_ERR("Unable to restore CF: no cfg left");
+		return -ENOMEM;
+	}
+	bt_addr_le_copy(&cfg->peer, &conn->le.dst);
+	cfg->id = conn->id;
+	set_change_aware(cfg, true);
 }
 
 void bt_gatt_att_max_mtu_changed(struct bt_conn *conn, uint16_t tx, uint16_t rx)
@@ -6062,10 +6093,12 @@ bool bt_gatt_change_aware(struct bt_conn *conn, bool req)
 
 	cfg = find_cf_cfg(conn);
 	if (!cfg || !CF_ROBUST_CACHING(cfg)) {
+		LOG_INF("%d: %p %d", __LINE__, (void *)cfg, cfg != NULL ? CF_ROBUST_CACHING(cfg) : -1);
 		return true;
 	}
 
 	if (atomic_test_bit(cfg->flags, CF_CHANGE_AWARE)) {
+		LOG_INF("%d", __LINE__);
 		return true;
 	}
 
@@ -6074,6 +6107,7 @@ bool bt_gatt_change_aware(struct bt_conn *conn, bool req)
 	 * ignore it.
 	 */
 	if (!req) {
+		LOG_INF("%d", __LINE__);
 		return false;
 	}
 
@@ -6086,6 +6120,7 @@ bool bt_gatt_change_aware(struct bt_conn *conn, bool req)
 	if (atomic_test_and_clear_bit(cfg->flags, CF_DB_HASH_READ)) {
 		bt_att_clear_out_of_sync_sent(conn);
 		set_change_aware(cfg, true);
+		LOG_INF("%d", __LINE__);
 		return true;
 	}
 
@@ -6101,11 +6136,14 @@ bool bt_gatt_change_aware(struct bt_conn *conn, bool req)
 		atomic_clear_bit(cfg->flags, CF_DB_HASH_READ);
 		bt_att_clear_out_of_sync_sent(conn);
 		set_change_aware(cfg, true);
+		LOG_INF("%d", __LINE__);
 		return true;
 	}
 
+	LOG_INF("%d", __LINE__);
 	return false;
 #else
+	LOG_INF("%d", __LINE__);
 	return true;
 #endif
 }
