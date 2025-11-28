@@ -582,6 +582,8 @@ int bt_mesh_net_send(struct bt_mesh_net_tx *tx, struct bt_mesh_adv *adv,
 
 	adv->ctx.cb = cb;
 	adv->ctx.cb_data = cb_data;
+	adv->ctx.src = tx->src;
+	adv->ctx.dst = tx->ctx->addr;
 
 	/* Deliver to GATT Proxy Clients if necessary. */
 	if (IS_ENABLED(CONFIG_BT_MESH_GATT_PROXY)) {
@@ -756,6 +758,9 @@ static void bt_mesh_net_relay(struct net_buf_simple *sbuf, struct bt_mesh_net_rx
 	     bt_mesh_priv_gatt_proxy_get() == BT_MESH_PRIV_GATT_PROXY_ENABLED)) {
 		bt_mesh_proxy_relay(adv, rx->ctx.recv_dst);
 	}
+
+	adv->ctx.src = rx->ctx.addr;
+	adv->ctx.dst = rx->ctx.recv_dst;
 
 	if (relay_to_adv(rx->net_if) || rx->friend_cred || bridge) {
 		bt_mesh_adv_send(adv, NULL, NULL);

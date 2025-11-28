@@ -55,6 +55,8 @@ struct bt_mesh_adv_ctx {
 		  tag:4;
 
 	uint8_t      xmit;
+	uint16_t src;
+	uint16_t dst;
 };
 
 struct bt_mesh_adv {

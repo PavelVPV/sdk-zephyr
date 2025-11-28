@@ -9,6 +9,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/debug/stack.h>
 #include <zephyr/sys/iterable_sections.h>
+#include <zephyr/sys/util.h>
 #include <zephyr/net_buf.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/hci.h>
@@ -25,7 +26,7 @@
 #include "proxy.h"
 #include "solicitation.h"
 
-#define LOG_LEVEL CONFIG_BT_MESH_ADV_LOG_LEVEL
+#define LOG_LEVEL 4//CONFIG_BT_MESH_ADV_LOG_LEVEL
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(bt_mesh_adv_ext);
 
@@ -133,6 +134,15 @@ static struct bt_mesh_ext_adv advs[] = {
 
 BUILD_ASSERT(ARRAY_SIZE(advs) <= CONFIG_BT_EXT_ADV_MAX_ADV_SET,
 	     "Insufficient adv instances");
+
+#if CONFIG_BT_MESH_RELAY_ADV_SETS
+static struct relay_cache_entry {
+	uint16_t src;
+	uint16_t dst;
+	size_t idx;
+} relay_cache[CONFIG_BT_MESH_RELAY_ADV_SETS * 10];
+static int relay_cache_write_pos;
+#endif
 
 static inline struct bt_mesh_ext_adv *relay_adv_get(void)
 {
@@ -292,12 +302,73 @@ static int stop_proxy_adv(struct bt_mesh_ext_adv *ext_adv)
 static int adv_queue_send_process(struct bt_mesh_ext_adv *ext_adv)
 {
 	struct bt_mesh_adv *adv;
+	__maybe_unused struct bt_mesh_adv *adv_prev = NULL;
 	int err = -ENOENT;
 
 	while ((adv = bt_mesh_adv_get_by_tag(ext_adv->tags, K_NO_WAIT))) {
+#if CONFIG_BT_MESH_RELAY_ADV_SETS
+		if (ext_adv->tags & BT_MESH_ADV_TAG_BIT_RELAY) {
+			int idx = ARRAY_INDEX(advs, ext_adv);
+
+			__ASSERT_NO_MSG(adv->__ref > 0);
+
+			if (adv_prev == NULL) {
+				adv_prev = adv;
+			} else if (adv_prev == adv) {
+				/* We have looped through all pending adv buffers */
+
+				LOG_DBG("All adv buffers checked");
+
+				bt_mesh_adv_send(adv, adv->ctx.cb, adv->ctx.cb_data);
+				bt_mesh_adv_unref(adv);
+
+				return -ENOENT;
+			}
+
+			LOG_DBG("Checking relay cache for (0x%04X,0x%04X) [%p] in relay [%d]",
+				adv->ctx.src, adv->ctx.dst, adv, idx);
+
+			/* Check if adv with this (src,dst) pair has been sent through another relay
+			 * set. If so, re-schedule them so that the corresponding relay set picks
+			 * it up.
+			 */
+			for (int i = 0; i < ARRAY_SIZE(relay_cache); i++) {
+				if (relay_cache[i].idx == idx) {
+					continue;
+				}
+
+				if (((relay_cache[i].src == adv->ctx.src &&
+				    relay_cache[i].dst == adv->ctx.dst) ||
+				    (relay_cache[i].src == adv->ctx.dst &&
+				     relay_cache[i].dst == adv->ctx.src)) &&
+				    (adv->ctx.dst != 0 && adv->ctx.src != 0)) {
+					LOG_DBG("Resending adv with (0x%04X,0x%04X) as it"
+						" belongs to relay [%d]. Current relay: "
+						"[%d]", adv->ctx.src, adv->ctx.dst,
+						relay_cache[i].idx, idx);
+					bt_mesh_adv_send(adv, adv->ctx.cb,
+							 adv->ctx.cb_data);
+					bt_mesh_adv_unref(adv);
+					/* We need to back off the outer loop as well */
+					adv = NULL;
+					break;
+				}
+			}
+
+			if (adv == NULL) {
+				/* Pick next adv from the queue */
+				LOG_DBG("Adv was resent from another relay set, picking next");
+				continue;
+			}
+		}
+
+		LOG_DBG("Sending adv %p with tag 0x%02X", adv, adv->ctx.tag);
+#endif
+
 		/* busy == 0 means this was canceled */
 		if (!adv->ctx.busy) {
 			bt_mesh_adv_unref(adv);
+			adv_prev = NULL;
 			continue;
 		}
 
@@ -305,8 +376,47 @@ static int adv_queue_send_process(struct bt_mesh_ext_adv *ext_adv)
 			LOG_WRN("Advertising %p canceled due to proxy adv failed to stop", adv);
 			bt_mesh_adv_send_start(0, -ECANCELED, &adv->ctx);
 			bt_mesh_adv_unref(adv);
+			adv_prev = NULL;
 			continue;
 		}
+
+#if CONFIG_BT_MESH_RELAY_ADV_SETS
+		if (ext_adv->tags & BT_MESH_ADV_TAG_BIT_RELAY) {
+			int idx = ARRAY_INDEX(advs, ext_adv);
+			bool found = false;
+
+			for (int i = 0; i < ARRAY_SIZE(relay_cache); i++) {
+				if (relay_cache[i].idx != idx) {
+					continue;
+				}
+
+				if (((relay_cache[i].src == adv->ctx.src &&
+				    relay_cache[i].dst == adv->ctx.dst) ||
+				    (relay_cache[i].src == adv->ctx.dst &&
+				     relay_cache[i].dst == adv->ctx.src)) &&
+				    (adv->ctx.dst != 0 && adv->ctx.src != 0)) {
+					found = true;
+				}
+			}
+
+			if (!found) {
+				relay_cache[relay_cache_write_pos].src = adv->ctx.src;
+				relay_cache[relay_cache_write_pos].dst = adv->ctx.dst;
+				relay_cache[relay_cache_write_pos].idx = idx;
+
+				relay_cache_write_pos++;
+
+				if (relay_cache_write_pos >= ARRAY_SIZE(relay_cache)) {
+					relay_cache_write_pos = 0;
+				}
+
+				LOG_DBG("Stored (0x%04X,0x%04X) in relay [%d] cache at pos %d",
+					adv->ctx.src, adv->ctx.dst, idx,
+					(relay_cache_write_pos == 0) ? ARRAY_SIZE(relay_cache) - 1
+							 : relay_cache_write_pos - 1);
+			}
+		}
+#endif
 
 		adv->ctx.busy = 0U;
 		err = adv_send(ext_adv, adv);
@@ -448,9 +558,10 @@ void bt_mesh_adv_relay_ready(void)
 	struct bt_mesh_ext_adv *ext_adv = relay_adv_get();
 
 	for (int i = 0; i < CONFIG_BT_MESH_RELAY_ADV_SETS; i++) {
-		if (schedule_send(&ext_adv[i])) {
-			return;
-		}
+		(void) schedule_send(&ext_adv[i]);
+		//if (schedule_send(&ext_adv[i])) {
+		//	return;
+		//}
 	}
 
 	/* Use the main adv set for the sending of relay messages. */
@@ -518,6 +629,14 @@ void bt_mesh_adv_init(void)
 		.options = BT_LE_ADV_OPT_USE_IDENTITY,
 #endif
 	};
+
+#if CONFIG_BT_MESH_RELAY_ADV_SETS
+	for (int i = 0; i < ARRAY_SIZE(relay_cache); i++) {
+		relay_cache[i].src = 0;
+		relay_cache[i].dst = 0;
+		relay_cache[i].idx = SIZE_MAX;
+	}
+#endif
 
 	for (int i = 0; i < ARRAY_SIZE(advs); i++) {
 		(void)memcpy(&advs[i].adv_param, &adv_param, sizeof(adv_param));

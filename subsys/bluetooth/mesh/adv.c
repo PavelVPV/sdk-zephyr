@@ -241,6 +241,7 @@ struct bt_mesh_adv *bt_mesh_adv_get_by_tag(enum bt_mesh_adv_tag_bit tags, k_time
 	return bt_mesh_adv_get(timeout);
 }
 
+
 void bt_mesh_adv_get_cancel(void)
 {
 	LOG_DBG("");
