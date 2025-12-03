@@ -87,6 +87,7 @@ static uint8_t discover_func(struct bt_conn *conn,
 		subscribe_params.value = BT_GATT_CCC_NOTIFY;
 		subscribe_params.ccc_handle = attr->handle;
 
+		printk("Subscribing to heart rate measurement\n");
 		err = bt_gatt_subscribe(conn, &subscribe_params);
 		if (err && err != -EALREADY) {
 			printk("Subscribe failed (err %d)\n", err);
@@ -100,12 +101,59 @@ static uint8_t discover_func(struct bt_conn *conn,
 	return BT_GATT_ITER_STOP;
 }
 
+static void auth_passkey_display(struct bt_conn *conn, unsigned int passkey)
+{
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+	printk("Passkey for %s: %06u\n", addr, passkey);
+}
+
+static void auth_cancel(struct bt_conn *conn)
+{
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+	printk("Pairing cancelled: %s\n", addr);
+}
+
+static void pairing_complete(struct bt_conn *conn, bool bonded)
+{
+	printk("Pairing Complete\n");
+}
+
+static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
+{
+	printk("Pairing Failed (%d). Disconnecting.\n", reason);
+	bt_conn_disconnect(conn, BT_HCI_ERR_AUTH_FAIL);
+}
+
+static uint32_t app_passkey(struct bt_conn *conn)
+{
+	printk("Passkey requested\n");
+	return 123456;
+}
+
+static struct bt_conn_auth_cb auth_cb_display = {
+	.passkey_display = auth_passkey_display,
+	.passkey_entry = NULL,
+	.cancel = auth_cancel,
+	.app_passkey = app_passkey,
+};
+
+static struct bt_conn_auth_info_cb auth_cb_info = {
+	.pairing_complete = pairing_complete,
+	.pairing_failed = pairing_failed,
+};
+
 static bool eir_found(struct bt_data *data, void *user_data)
 {
 	bt_addr_le_t *addr = user_data;
 	int i;
 
-	printk("[AD]: %u data_len %u\n", data->type, data->data_len);
+//	printk("[AD]: %u data_len %u\n", data->type, data->data_len);
 
 	switch (data->type) {
 	case BT_DATA_UUID16_SOME:
@@ -167,8 +215,8 @@ static void device_found(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
 	char dev[BT_ADDR_LE_STR_LEN];
 
 	bt_addr_le_to_str(addr, dev, sizeof(dev));
-	printk("[DEVICE]: %s, AD evt type %u, AD data len %u, RSSI %i\n",
-	       dev, type, ad->len, rssi);
+//	printk("[DEVICE]: %s, AD evt type %u, AD data len %u, RSSI %i\n",
+//	       dev, type, ad->len, rssi);
 
 	/* We're only interested in legacy connectable events or
 	 * possible extended advertising that are connectable.
@@ -228,22 +276,11 @@ static void connected(struct bt_conn *conn, uint8_t conn_err)
 
 	printk("Connected: %s\n", addr);
 
-	total_rx_count = 0U;
-
-	if (conn == default_conn) {
-		memcpy(&discover_uuid, BT_UUID_HRS, sizeof(discover_uuid));
-		discover_params.uuid = &discover_uuid.uuid;
-		discover_params.func = discover_func;
-		discover_params.start_handle = BT_ATT_FIRST_ATTRIBUTE_HANDLE;
-		discover_params.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE;
-		discover_params.type = BT_GATT_DISCOVER_PRIMARY;
-
-		err = bt_gatt_discover(default_conn, &discover_params);
-		if (err) {
-			printk("Discover failed(err %d)\n", err);
-			return;
-		}
+	if ((err = bt_conn_set_security(conn, BT_SECURITY_L2)) != 0) {
+		printk("Failed to set security (err %d)\n", err);
 	}
+
+	total_rx_count = 0U;
 }
 
 static void disconnected(struct bt_conn *conn, uint8_t reason)
@@ -264,23 +301,102 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 	start_scan();
 }
 
+static void start_discovery(struct k_work *work)
+{
+	if (default_conn) {
+		printk("Starting discovery\n");
+
+		memcpy(&discover_uuid, BT_UUID_HRS, sizeof(discover_uuid));
+		discover_params.uuid = &discover_uuid.uuid;
+		discover_params.func = discover_func;
+		discover_params.start_handle = BT_ATT_FIRST_ATTRIBUTE_HANDLE;
+		discover_params.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE;
+		discover_params.type = BT_GATT_DISCOVER_PRIMARY;
+
+		int err = bt_gatt_discover(default_conn, &discover_params);
+		if (err) {
+			printk("Discover failed(err %d)\n", err);
+			return;
+		}
+	}
+}
+static K_WORK_DELAYABLE_DEFINE(discovery_work, start_discovery);
+
+static void security_changed(struct bt_conn *conn, bt_security_t level,
+			     enum bt_security_err err)
+{
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+	if (!err) {
+		printk("Security changed: %s level %u\n", addr, level);
+	} else {
+		printk("Security failed: %s level %u err %s(%d)\n", addr, level,
+		       bt_security_err_to_str(err), err);
+		return;
+	}
+
+	k_work_schedule(&discovery_work, K_SECONDS(5));
+
+#if 0
+	if (conn == default_conn) {
+		printk("Starting discovery\n");
+
+		memcpy(&discover_uuid, BT_UUID_HRS, sizeof(discover_uuid));
+		discover_params.uuid = &discover_uuid.uuid;
+		discover_params.func = discover_func;
+		discover_params.start_handle = BT_ATT_FIRST_ATTRIBUTE_HANDLE;
+		discover_params.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE;
+		discover_params.type = BT_GATT_DISCOVER_PRIMARY;
+
+		err = bt_gatt_discover(default_conn, &discover_params);
+		if (err) {
+			printk("Discover failed(err %d)\n", err);
+			return;
+		}
+	}
+#endif
+}
+
 BT_CONN_CB_DEFINE(conn_callbacks) = {
 	.connected = connected,
 	.disconnected = disconnected,
+	.security_changed = security_changed,
 };
+
+static void bt_ready(int err)
+{
+	if (err) {
+		printk("Bluetooth init failed (err %d)\n", err);
+		return;
+	}
+
+	printk("Bluetooth initialized\n");
+
+	err = settings_load();
+	if (err) {
+		printk("Settings load failed (err %d)\n", err);
+		return;
+	}
+
+	k_sleep(K_SECONDS(1));
+
+	bt_conn_auth_cb_register(&auth_cb_display);
+	bt_conn_auth_info_cb_register(&auth_cb_info);
+
+	start_scan();
+}
 
 int main(void)
 {
 	int err;
-	err = bt_enable(NULL);
+	err = bt_enable(bt_ready);
 
 	if (err) {
 		printk("Bluetooth init failed (err %d)\n", err);
 		return 0;
 	}
 
-	printk("Bluetooth initialized\n");
-
-	start_scan();
 	return 0;
 }

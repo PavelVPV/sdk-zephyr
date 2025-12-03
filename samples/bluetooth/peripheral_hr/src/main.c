@@ -64,9 +64,25 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 	(void)atomic_set_bit(state, STATE_DISCONNECTED);
 }
 
+static void security_changed(struct bt_conn *conn, bt_security_t level,
+			     enum bt_security_err err)
+{
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+	if (!err) {
+		printk("Security changed: %s level %u\n", addr, level);
+	} else {
+		printk("Security failed: %s level %u err %s(%d)\n", addr, level,
+		       bt_security_err_to_str(err), err);
+	}
+}
+
 BT_CONN_CB_DEFINE(conn_callbacks) = {
 	.connected = connected,
 	.disconnected = disconnected,
+	.security_changed = security_changed,
 };
 
 static void hrs_ntf_changed(bool enabled)
@@ -90,8 +106,42 @@ static void auth_cancel(struct bt_conn *conn)
 	printk("Pairing cancelled: %s\n", addr);
 }
 
+static void auth_passkey_display(struct bt_conn *conn, unsigned int passkey)
+{
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+	printk("Passkey for %s: %06u\n", addr, passkey);
+}
+
+static void pairing_complete(struct bt_conn *conn, bool bonded)
+{
+	printk("Pairing Complete\n");
+}
+
+static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
+{
+	printk("Pairing Failed (%d). Disconnecting.\n", reason);
+	bt_conn_disconnect(conn, BT_HCI_ERR_AUTH_FAIL);
+}
+
+static uint32_t app_passkey(struct bt_conn *conn)
+{
+	printk("Passkey requested\n");
+	return 123456;
+}
+
 static struct bt_conn_auth_cb auth_cb_display = {
+	.passkey_display = auth_passkey_display,
+	.passkey_entry = NULL,
 	.cancel = auth_cancel,
+	.app_passkey = app_passkey,
+};
+
+static struct bt_conn_auth_info_cb auth_cb_info = {
+	.pairing_complete = pairing_complete,
+	.pairing_failed = pairing_failed,
 };
 
 static void bas_notify(void)
@@ -201,7 +251,14 @@ int main(void)
 
 	printk("Bluetooth initialized\n");
 
+	err = settings_load();
+	if (err) {
+		printk("Settings load failed (err %d)\n", err);
+		return 0;
+	}
+
 	bt_conn_auth_cb_register(&auth_cb_display);
+	bt_conn_auth_info_cb_register(&auth_cb_info);
 
 	bt_hrs_cb_register(&hrs_cb);
 
