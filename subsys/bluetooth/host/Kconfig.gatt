@@ -16,11 +16,25 @@ config BT_ATT_ERR_TO_STR
 config BT_ATT_TX_COUNT
 	int "Number of ATT buffers"
 	default BT_BUF_ACL_TX_COUNT
-	default 3
 	range 1 $(UINT8_MAX)
 	help
-	  These buffers are only used for sending anything over ATT.
-	  Requests, responses, indications, confirmations, notifications.
+	  These buffers are only used for sending requests, responses,
+	  indications, confirmations over ATT.
+
+	  Should be equal to number of ATT bearers (1 for UATT +
+	  CONFIG_BT_EATT_MAX if EATT is enabled) multiplied by the number of
+	  connections (CONFIG_BT_MAX_CONN).
+
+	  GATT Client requires 1 more extra buffer (in addition to those used
+	  by application) to perform continuous discovery.
+
+config BT_ATT_NOTIFY_COUNT
+	int "Number of ATT notification buffers"
+	default 3
+	range 0 64
+	help
+	  Number of buffers available for ATT notifications. Setting this to 0
+	  disables notifications.
 
 config BT_ATT_PREPARE_COUNT
 	int "Number of ATT prepare write buffers"
