@@ -245,6 +245,7 @@ struct bt_keys *bt_keys_find_irk(uint8_t id, const bt_addr_le_t *addr)
 	LOG_DBG("%s", bt_addr_le_str(addr));
 
 	if (!bt_addr_le_is_rpa(addr)) {
+		LOG_DBG("Not an RPA");
 		return NULL;
 	}
 
