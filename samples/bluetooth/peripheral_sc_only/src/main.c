@@ -121,9 +121,58 @@ static void auth_cancel(struct bt_conn *conn)
 	printk("Pairing cancelled: %s\n", addr);
 }
 
+#include "host/keys.h"
+
+static void get_irk_by_id_addr(uint8_t id, const bt_addr_le_t *addr)
+{
+	struct bt_keys *keys;
+
+	keys = bt_keys_get_type(BT_KEYS_IRK, id, addr);
+
+	char addr_str[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(addr, addr_str, sizeof(addr_str));
+
+	if (keys) {
+		printk("Found IRK bond for %s (id %u)\n", addr_str, id);
+		printk("IRK: ");
+		for (size_t i = 0; i < sizeof(keys->irk.val); i++) {
+			printk("%02x", keys->irk.val[i]);
+		}
+		printk("\n");
+	} else {
+		printk("No IRK bond found for %s (id %u)\n", addr_str, id);
+	}
+}
+
+static void bond(const struct bt_bond_info *info, void *user_data)
+{
+	get_irk_by_id_addr(BT_ID_DEFAULT, &info->addr);
+}
+
+static void get_irk_for_conn(struct bt_conn *conn)
+{
+	struct bt_conn_info info;
+	int err;
+
+	err = bt_conn_get_info(conn, &info);
+	if (err != 0) {
+		printk("Failed to get connection info (err %d)\n", err);
+		return;
+	}
+
+	get_irk_by_id_addr(BT_ID_DEFAULT, info.le.dst);
+}
+
 static void pairing_complete(struct bt_conn *conn, bool bonded)
 {
 	printk("Pairing Complete\n");
+
+	printk("Listing all bond IRKs:\n");
+	bt_foreach_bond(BT_ID_DEFAULT, bond, NULL);
+
+	printk("Getting IRK for current connection:\n");
+	get_irk_for_conn(conn);
 }
 
 static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
