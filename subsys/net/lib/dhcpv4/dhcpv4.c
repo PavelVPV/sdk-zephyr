@@ -1187,6 +1187,12 @@ static bool dhcpv4_parse_options(struct net_pkt *pkt,
 				return false;
 			}
 
+			for (uint8_t i = 0; i < dns_servers_cnt; i++) {
+				NET_INFO("options_dns: DHCP server %s offered DNS server[%u]: %s",
+					  net_sprint_ipv4_addr(&iface->config.dhcpv4.server_id),
+					  i, net_sprint_ipv4_addr(&dnses[i].sin_addr));
+			}
+
 			ctx = dns_resolve_get_default();
 			for (uint8_t i = 0; i < dns_servers_cnt; i++) {
 				dnses[i].sin_family = NET_AF_INET;

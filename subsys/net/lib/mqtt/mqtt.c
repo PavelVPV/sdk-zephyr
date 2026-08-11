@@ -77,6 +77,8 @@ static int client_connect(struct mqtt_client *client)
 
 	err_code = mqtt_transport_connect(client);
 	if (err_code < 0) {
+		NET_ERR("mqtt.c: client_connect: mqtt_transport_connect failed, "
+			"returning %d to mqtt_connect()", err_code);
 		return err_code;
 	}
 

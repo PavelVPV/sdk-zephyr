@@ -71,6 +71,8 @@ int mqtt_client_tcp_connect(struct mqtt_client *client)
 	ret = zsock_connect(client->transport.tcp.sock, client->broker,
 			    peer_addr_size);
 	if (ret < 0) {
+		NET_ERR("mqtt_transport_socket_tcp.c: mqtt_client_tcp_connect: "
+			"zsock_connect failed, returning %d to client_connect()", -errno);
 		goto error;
 	}
 

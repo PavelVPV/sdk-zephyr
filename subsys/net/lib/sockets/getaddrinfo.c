@@ -177,6 +177,11 @@ again:
 		st = DNS_EAI_SYSTEM;
 	}
 
+	if (st != 0) {
+		NET_ERR("getaddrinfo.c: exec_query: DNS query for \"%s\" did not resolve, "
+			"returning %d to z_impl_z_zsock_getaddrinfo_internal()", host, st);
+	}
+
 	return st;
 }
 

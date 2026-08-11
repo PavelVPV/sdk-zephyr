@@ -5,7 +5,7 @@
  */
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(conn_mgr, CONFIG_NET_CONNECTION_MANAGER_LOG_LEVEL);
+LOG_MODULE_REGISTER(conn_mgr, 4);//CONFIG_NET_CONNECTION_MANAGER_LOG_LEVEL);
 
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
@@ -88,6 +88,7 @@ static int conn_mgr_get_index_for_if(struct net_if *iface)
  */
 static void conn_mgr_mon_set_ready(int idx, bool ready, bool ready_ipv4, bool ready_ipv6)
 {
+	LOG_WRN("conn_mgr_mon_set_ready: idx=%d, ready=%d, ready_ipv4=%d, ready_ipv6=%d", idx, ready, ready_ipv4, ready_ipv6);
 	/* Clear and then update the L4-readiness bit */
 	iface_states[idx] &= ~CONN_MGR_IF_READY;
 	iface_states[idx] &= ~CONN_MGR_IF_READY_IPV4;
@@ -152,6 +153,11 @@ static void conn_mgr_mon_handle_update(void)
 		is_ipv6_ready	= is_oper_up && has_ipv6 && !is_ignored;
 		is_ipv4_ready	= is_oper_up && has_ipv4 && !is_ignored;
 
+		LOG_WRN("conn_mgr_mon_handle_update: is_oper_up=%d, has_ip=%d, has_ipv6=%d, has_ipv4=%d, is_ignored=%d",
+			is_oper_up, has_ip, has_ipv6, has_ipv4, is_ignored);
+		LOG_WRN("conn_mgr_mon_handle_update: idx=%d, is_l4_ready=%d, is_ipv6_ready=%d, is_ipv4_ready=%d",
+			idx, is_l4_ready, is_ipv6_ready, is_ipv4_ready);
+
 		/* Track ready iface count */
 		if (is_l4_ready) {
 			ready_count += 1;
@@ -184,6 +190,7 @@ static void conn_mgr_mon_handle_update(void)
 			/* We just lost connectivity */
 			net_mgmt_event_notify(NET_EVENT_L4_DISCONNECTED, blame);
 		} else if (last_ready_count == 0) {
+			LOG_WRN("conn_mgr_mon_handle_update: ready_count=%d, last_ready_count=%d", ready_count, last_ready_count);
 			/* We just gained connectivity */
 			net_mgmt_event_notify(NET_EVENT_L4_CONNECTED, blame);
 		}
@@ -230,6 +237,8 @@ static void conn_mgr_mon_initial_state(struct net_if *iface)
 	int idx = conn_mgr_get_index_for_if(iface);
 
 	k_mutex_lock(&conn_mgr_mon_lock, K_FOREVER);
+
+	LOG_WRN("conn_mgr_mon_initial_state: iface=%p, idx=%d", iface, idx);
 
 	if (net_if_is_up(iface)) {
 		NET_DBG("Iface %p UP", iface);
@@ -292,6 +301,8 @@ void conn_mgr_mon_resend_status(void)
 {
 	k_mutex_lock(&conn_mgr_mon_lock, K_FOREVER);
 
+	LOG_WRN("conn_mgr_mon_resend_status: %d, %d, %d", last_ready_count, last_ready_count_ipv6, last_ready_count_ipv4);
+
 	if (last_ready_count == 0) {
 		net_mgmt_event_notify(NET_EVENT_L4_DISCONNECTED, last_blame);
 	} else {
@@ -337,6 +348,7 @@ void conn_mgr_watch_iface(struct net_if *iface)
 	if (iface_states[idx] & CONN_MGR_IF_IGNORED) {
 		/* Clear ignored flag and mark state as changed */
 		iface_states[idx] &= ~CONN_MGR_IF_IGNORED;
+		LOG_WRN("conn_mgr_watch_iface: iface=%p, idx=%d", iface, idx);
 		k_sem_give(&conn_mgr_mon_updated);
 	}
 

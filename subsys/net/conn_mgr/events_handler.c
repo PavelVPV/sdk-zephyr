@@ -5,7 +5,7 @@
  */
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_DECLARE(conn_mgr, CONFIG_NET_CONNECTION_MANAGER_LOG_LEVEL);
+LOG_MODULE_DECLARE(conn_mgr, 4);//CONFIG_NET_CONNECTION_MANAGER_LOG_LEVEL);
 
 #include <errno.h>
 #include <zephyr/net/net_if.h>

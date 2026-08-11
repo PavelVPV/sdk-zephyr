@@ -1957,8 +1957,9 @@ static void tcp_resend_data(struct k_work *work)
 	NET_DBG("[%p] send_data_retries=%hu", conn, conn->send_data_retries);
 
 	if (conn->send_data_retries >= tcp_retries) {
-		NET_DBG("[%p] close, data retransmissions exceeded (%d >= %d)",
-			conn, (int)conn->send_data_retries, (int)tcp_retries);
+		NET_ERR("tcp.c: tcp_resend_data: [%p] data/SYN retransmissions exceeded "
+			"(%d >= %d), closing connection with -ETIMEDOUT (%d)",
+			conn, (int)conn->send_data_retries, (int)tcp_retries, -ETIMEDOUT);
 		conn_unref = true;
 		goto out;
 	}
@@ -2038,6 +2039,9 @@ static void tcp_establish_timeout(struct tcp *conn)
 {
 	NET_DBG("[%p] Did not receive %s in %dms", conn, "ACK", ACK_TIMEOUT_MS);
 	NET_DBG("[%p] %s", conn, tcp_conn_state(conn, NULL));
+
+	NET_ERR("tcp.c: tcp_establish_timeout: [%p] connection did not reach ESTABLISHED "
+		"within %dms, closing with -ETIMEDOUT (%d)", conn, ACK_TIMEOUT_MS, -ETIMEDOUT);
 
 	(void)tcp_conn_close(conn, -ETIMEDOUT);
 }

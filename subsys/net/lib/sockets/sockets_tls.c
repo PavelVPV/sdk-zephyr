@@ -2966,7 +2966,13 @@ int ztls_connect_ctx(struct tls_context *ctx, const struct net_sockaddr *addr,
 			ctx, K_MSEC(CONFIG_NET_SOCKETS_TLS_CONNECT_TIMEOUT));
 		if (ret < 0) {
 			if ((ret == -EAGAIN) && !is_non_block) {
+				NET_ERR("sockets_tls.c: ztls_connect_ctx: TLS handshake did not "
+					"complete within CONFIG_NET_SOCKETS_TLS_CONNECT_TIMEOUT, "
+					"returning -ETIMEDOUT to zsock_connect()");
 				ret = -ETIMEDOUT;
+			} else {
+				NET_ERR("sockets_tls.c: ztls_connect_ctx: tls_mbedtls_handshake "
+					"failed, returning %d to zsock_connect()", ret);
 			}
 
 			goto error;

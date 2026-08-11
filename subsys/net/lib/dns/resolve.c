@@ -1677,6 +1677,11 @@ static void dns_resolve_cancel_slot(struct dns_resolve_context *ctx, int slot)
 	if (ctx->queries[slot].cb_called) {
 		invoke_query_callback(DNS_EAI_ALLDONE, NULL, &ctx->queries[slot]);
 	} else {
+		LOG_ERR("resolve.c: dns_resolve_cancel_slot: query %u (name %s) never got a "
+			"response, invoking callback with DNS_EAI_CANCELED (%d)",
+			ctx->queries[slot].id,
+			ctx->queries[slot].query == NULL ? "<unknown>" : ctx->queries[slot].query,
+			DNS_EAI_CANCELED);
 		invoke_query_callback(DNS_EAI_CANCELED, NULL, &ctx->queries[slot]);
 	}
 
@@ -1819,6 +1824,12 @@ static void query_timeout(struct k_work *work)
 
 	NET_DBG("Query timeout DNS req %u type %d hash %u", pending_query->id,
 		pending_query->query_type, pending_query->query_hash);
+
+	LOG_ERR("resolve.c: query_timeout: DNS req %u (name %s) got no response before "
+		"the query timeout, cancelling with DNS_EAI_CANCELED (%d)",
+		pending_query->id,
+		pending_query->query == NULL ? "<unknown>" : pending_query->query,
+		DNS_EAI_CANCELED);
 
 	/* The resolve cancel will invoke release_query(), but release will
 	 * not be completed because the work item is still pending.  Instead

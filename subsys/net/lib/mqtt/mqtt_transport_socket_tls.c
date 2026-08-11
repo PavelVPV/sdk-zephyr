@@ -155,6 +155,8 @@ int mqtt_client_tls_connect(struct mqtt_client *client)
 	ret = zsock_connect(client->transport.tls.sock, client->broker,
 			    peer_addr_size);
 	if (ret < 0) {
+		NET_ERR("mqtt_transport_socket_tls.c: mqtt_client_tls_connect: "
+			"zsock_connect failed, returning %d to client_connect()", -errno);
 		goto error;
 	}
 
