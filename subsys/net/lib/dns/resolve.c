@@ -1188,6 +1188,14 @@ static int dns_validate_record(struct dns_resolve_context *ctx, struct dns_msg_t
 		src = dns_msg->msg + dns_msg->response_position;
 		memcpy(addr, src, address_size);
 
+		if (*answer_type == DNS_RR_TYPE_A) {
+			LOG_ERR("DNS response: A record %s",
+				net_sprint_ipv4_addr(&net_sin(&info->ai_addr)->sin_addr));
+		} else {
+			LOG_ERR("DNS response: AAAA record %s",
+				net_sprint_ipv6_addr(&net_sin6(&info->ai_addr)->sin6_addr));
+		}
+
 		break;
 	}
 	case DNS_RESPONSE_TXT:
