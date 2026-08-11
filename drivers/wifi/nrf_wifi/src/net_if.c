@@ -473,7 +473,7 @@ int nrf_wifi_if_send(const struct device *dev,
 
 		if ((vif_ctx_zep->if_carr_state != NRF_WIFI_FMAC_IF_CARR_STATE_ON) ||
 		    (!authorized && !is_eapol(pkt))) {
-			LOG_DBG("%s: carrier state: %d, authorized: %d, is_eapol: %d",
+			LOG_ERR("%s: dropping TX pkt: carrier state: %d, authorized: %d, is_eapol: %d",
 				__func__, vif_ctx_zep->if_carr_state, authorized, is_eapol(pkt));
 			ret = -EPERM;
 			goto drop;
