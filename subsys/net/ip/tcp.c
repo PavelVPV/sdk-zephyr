@@ -3247,6 +3247,13 @@ static enum net_verdict tcp_in(struct tcp *conn, struct net_pkt *pkt)
 			 */
 			tcp_nbr_reachability_hint(conn);
 		} else {
+			/* DNM: was silent - log why a SYN_SENT connection
+			 * rejects an incoming segment (e.g. SYN|ACK with a
+			 * mismatched ACK number) before replying with RST.
+			 */
+			NET_WARN("[%p] SYN_SENT: rejecting segment (flags=0x%x), "
+				 "th_ack=%u expected conn->seq=%u",
+				 conn, fl, th ? th_ack(th) : 0, conn->seq);
 			net_tcp_reply_rst(pkt);
 		}
 

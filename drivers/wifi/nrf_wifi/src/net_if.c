@@ -277,6 +277,12 @@ void nrf_wifi_if_rx_frm(void *os_vif_ctx, void *frm)
 		return;
 	}
 
+	/* DNM: debug log for tracking frames handed from the RPU/driver to the
+	 * IP stack, independent of CONFIG_WIFI_NRF70_LOG_LEVEL so it stays
+	 * visible without enabling the (very chatty) driver debug logs.
+	 */
+	LOG_INF("RX up to net stack: len=%zu", net_pkt_get_len(pkt));
+
 	status = net_recv_data(iface, pkt);
 
 	if (status < 0) {
@@ -478,6 +484,10 @@ int nrf_wifi_if_send(const struct device *dev,
 			ret = -EPERM;
 			goto drop;
 		}
+		/* DNM: debug log for tracking frames submitted to the RPU for
+		 * transmission, independent of CONFIG_WIFI_NRF70_LOG_LEVEL.
+		 */
+		LOG_INF("TX submit to RPU: len=%zu", net_pkt_get_len(pkt));
 		ret = nrf_wifi_fmac_start_xmit(rpu_ctx_zep->rpu_ctx,
 					       vif_ctx_zep->vif_idx,
 					       nbuf);
