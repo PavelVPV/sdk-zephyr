@@ -28,6 +28,8 @@ LOG_MODULE_REGISTER(net_core, CONFIG_NET_CORE_LOG_LEVEL);
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_log.h>
 #include <zephyr/net/net_mgmt.h>
+#include <zephyr/sys/crc.h>
+#include <zephyr/sys/util.h>
 #include <zephyr/net/net_pkt.h>
 #include <zephyr/net/net_core.h>
 #include <zephyr/net/dns_resolve.h>
@@ -69,6 +71,52 @@ LOG_MODULE_REGISTER(net_core, CONFIG_NET_CORE_LOG_LEVEL);
 #include "net_stats.h"
 
 #if defined(CONFIG_NET_NATIVE)
+
+/* DNM: dump the packet remaining after L2 processing (IP header onward -
+ * the Ethernet header itself was already net_buf_pull()'d off by
+ * net_eth_recv(), but net_pkt_lladdr_src/dst() still hold it) whenever the
+ * IP-family sanity check fails. This is meant to catch content corruption
+ * (right length, garbage bytes) as opposed to a packet that never arrived.
+ * Static/bounded buffer, no stack usage; net_core only runs on rx_q[0], so
+ * there's no concurrent-access concern for this throwaway debug path.
+ */
+static uint32_t dnm_ip_family_drop_seq;
+
+static void dnm_dump_unknown_ip_family_pkt(struct net_pkt *pkt)
+{
+	static uint8_t dnm_dump_buf[1500];
+	/* net_sprint_ll_addr() shares one static buffer across calls - use
+	 * net_sprint_ll_addr_buf() with distinct buffers for src and dst so
+	 * one doesn't clobber the other before the log line is formatted.
+	 */
+	char src_str[sizeof("xx:xx:xx:xx:xx:xx:xx:xx")];
+	char dst_str[sizeof("xx:xx:xx:xx:xx:xx:xx:xx")];
+	struct net_pkt_cursor backup;
+	size_t len = MIN(net_pkt_remaining_data(pkt), sizeof(dnm_dump_buf));
+	uint32_t seq = ++dnm_ip_family_drop_seq;
+
+	net_pkt_cursor_backup(pkt, &backup);
+
+	if (net_pkt_read(pkt, dnm_dump_buf, len) < 0) {
+		NET_WARN("dnm#%u: failed to read pkt %p for dump", seq, pkt);
+		net_pkt_cursor_restore(pkt, &backup);
+		return;
+	}
+
+	net_pkt_cursor_restore(pkt, &backup);
+
+	net_sprint_ll_addr_buf(net_pkt_lladdr_src(pkt)->addr, net_pkt_lladdr_src(pkt)->len,
+				src_str, sizeof(src_str));
+	net_sprint_ll_addr_buf(net_pkt_lladdr_dst(pkt)->addr, net_pkt_lladdr_dst(pkt)->len,
+				dst_str, sizeof(dst_str));
+
+	NET_WARN("dnm#%u: corrupt-IP-family pkt %p len=%zu(of %zu) "
+		 "src=%s dst=%s crc32=0x%08x",
+		 seq, pkt, len, net_pkt_get_len(pkt), src_str, dst_str,
+		 crc32_ieee(dnm_dump_buf, len));
+	LOG_HEXDUMP_WRN(dnm_dump_buf, len, "dnm: corrupt-IP-family pkt bytes (from IP header on)");
+}
+
 static inline enum net_verdict process_data(struct net_pkt *pkt)
 {
 	int ret;
@@ -121,6 +169,7 @@ static inline enum net_verdict process_data(struct net_pkt *pkt)
 		}
 
 		NET_DBG("Unknown IP family packet (0x%x)", NET_IPV6_HDR(pkt)->vtc & 0xf0);
+		dnm_dump_unknown_ip_family_pkt(pkt);
 		net_stats_update_ip_errors_protoerr(net_pkt_iface(pkt));
 		net_stats_update_ip_errors_vhlerr(net_pkt_iface(pkt));
 		return NET_DROP;

@@ -21,6 +21,8 @@
 #include <zephyr/drivers/wifi/nrf_wifi/bus/rpu_hw_if.h>
 #include <zephyr/drivers/wifi/nrf_wifi/bus/qspi_if.h>
 #include <zephyr/sys/math_extras.h>
+#include <zephyr/sys/crc.h>
+#include <zephyr/sys/util.h>
 
 #include "shim.h"
 #include "work.h"
@@ -546,12 +548,26 @@ void *net_pkt_to_nbuf(struct net_pkt *pkt)
 	return nbuff;
 }
 
+/* DNM: earliest point in open-source host code where a received frame's
+ * bytes are visible - `data`/`len` here are exactly what the closed-source
+ * FMAC binary handed us via the OSAL, before any Zephyr-side copy. Checksum
+ * them here (crc_pre), then checksum what actually landed in the net_pkt
+ * after net_pkt_write() (crc_post). crc_pre != crc_post would point at the
+ * copy/allocation path in this function; crc_pre matching a corrupted
+ * packet observed later (e.g. at net_core's "Unknown IP family" drop) means
+ * the corruption was already present when the binary handed the frame to
+ * us - i.e. on the RPU/bus side, out of host source visibility.
+ */
+static uint32_t dnm_rx_seq;
+
 void *net_pkt_from_nbuf(void *iface, void *frm)
 {
 	struct net_pkt *pkt = NULL;
 	unsigned char *data;
 	unsigned int len;
 	struct nwb *nwb = frm;
+	uint32_t crc_pre;
+	uint32_t seq;
 
 	if (!nwb) {
 		return NULL;
@@ -561,16 +577,44 @@ void *net_pkt_from_nbuf(void *iface, void *frm)
 
 	data = zep_shim_nbuf_data_get(nwb);
 
+	/* Cap to the same 1500 bytes the crc_post readback below uses, so the
+	 * two checksums are always computed over the identical byte range
+	 * (real RX frames are well under this; no MTU here exceeds it).
+	 */
+	crc_pre = crc32_ieee(data, MIN(len, 1500));
+	seq = ++dnm_rx_seq;
+	LOG_INF("dnm-rx#%u: nwb len=%u crc_pre=0x%08x", seq, len, crc_pre);
+
 	pkt = net_pkt_rx_alloc_with_buffer(iface, len, NET_AF_UNSPEC, 0, K_MSEC(100));
 
 	if (!pkt) {
+		LOG_WRN("dnm-rx#%u: net_pkt_rx_alloc_with_buffer failed, len=%u", seq, len);
 		goto out;
 	}
 
 	if (net_pkt_write(pkt, data, len)) {
+		LOG_WRN("dnm-rx#%u: net_pkt_write failed, len=%u", seq, len);
 		net_pkt_unref(pkt);
 		pkt = NULL;
 		goto out;
+	}
+
+	{
+		static uint8_t dnm_rx_readback_buf[1500];
+		struct net_pkt_cursor backup;
+		size_t rlen = MIN(len, sizeof(dnm_rx_readback_buf));
+
+		net_pkt_cursor_backup(pkt, &backup);
+		net_pkt_cursor_init(pkt);
+		if (net_pkt_read(pkt, dnm_rx_readback_buf, rlen) == 0) {
+			uint32_t crc_post = crc32_ieee(dnm_rx_readback_buf, rlen);
+
+			LOG_INF("dnm-rx#%u: pkt %p len=%u crc_post=0x%08x match=%d",
+				seq, pkt, len, crc_post, crc_post == crc_pre);
+		} else {
+			LOG_WRN("dnm-rx#%u: readback failed for crc_post", seq);
+		}
+		net_pkt_cursor_restore(pkt, &backup);
 	}
 
 out:
