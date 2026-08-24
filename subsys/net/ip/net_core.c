@@ -72,6 +72,7 @@ LOG_MODULE_REGISTER(net_core, CONFIG_NET_CORE_LOG_LEVEL);
 
 #if defined(CONFIG_NET_NATIVE)
 
+#if defined(CONFIG_CRC)
 /* DNM: dump the packet remaining after L2 processing (IP header onward -
  * the Ethernet header itself was already net_buf_pull()'d off by
  * net_eth_recv(), but net_pkt_lladdr_src/dst() still hold it) whenever the
@@ -116,6 +117,7 @@ static void dnm_dump_unknown_ip_family_pkt(struct net_pkt *pkt)
 		 crc32_ieee(dnm_dump_buf, len));
 	LOG_HEXDUMP_WRN(dnm_dump_buf, len, "dnm: corrupt-IP-family pkt bytes (from IP header on)");
 }
+#endif
 
 static inline enum net_verdict process_data(struct net_pkt *pkt)
 {
@@ -169,7 +171,9 @@ static inline enum net_verdict process_data(struct net_pkt *pkt)
 		}
 
 		NET_DBG("Unknown IP family packet (0x%x)", NET_IPV6_HDR(pkt)->vtc & 0xf0);
+#if defined(CONFIG_CRC)
 		dnm_dump_unknown_ip_family_pkt(pkt);
+#endif
 		net_stats_update_ip_errors_protoerr(net_pkt_iface(pkt));
 		net_stats_update_ip_errors_vhlerr(net_pkt_iface(pkt));
 		return NET_DROP;

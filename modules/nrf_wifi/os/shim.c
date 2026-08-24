@@ -23,6 +23,7 @@
 #include <zephyr/sys/math_extras.h>
 #include <zephyr/sys/crc.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/sys/byteorder.h>
 
 #include "shim.h"
 #include "work.h"
@@ -577,6 +578,22 @@ void *net_pkt_from_nbuf(void *iface, void *frm)
 
 	data = zep_shim_nbuf_data_get(nwb);
 
+	/* DNM: identify unusually small RX frames (e.g. ARP, EAPOL, 802.11
+	 * QoS-Null placeholders) by their actual Ethernet header instead of
+	 * guessing the frame type from length alone.
+	 */
+	if (len >= 14 && len < 64) {
+		uint16_t ethertype = sys_get_be16(&data[12]);
+
+		LOG_INF("dnm-small-rx: len=%u dst=%02x:%02x:%02x:%02x:%02x:%02x "
+			"src=%02x:%02x:%02x:%02x:%02x:%02x ethertype=0x%04x",
+			len,
+			data[0], data[1], data[2], data[3], data[4], data[5],
+			data[6], data[7], data[8], data[9], data[10], data[11],
+			ethertype);
+		LOG_HEXDUMP_INF(data, len, "dnm-small-rx: bytes");
+	}
+#if defined(CONFIG_CRC)
 	/* Cap to the same 1500 bytes the crc_post readback below uses, so the
 	 * two checksums are always computed over the identical byte range
 	 * (real RX frames are well under this; no MTU here exceeds it).
@@ -584,7 +601,7 @@ void *net_pkt_from_nbuf(void *iface, void *frm)
 	crc_pre = crc32_ieee(data, MIN(len, 1500));
 	seq = ++dnm_rx_seq;
 	LOG_INF("dnm-rx#%u: nwb len=%u crc_pre=0x%08x", seq, len, crc_pre);
-
+#endif
 	pkt = net_pkt_rx_alloc_with_buffer(iface, len, NET_AF_UNSPEC, 0, K_MSEC(100));
 
 	if (!pkt) {
@@ -599,6 +616,7 @@ void *net_pkt_from_nbuf(void *iface, void *frm)
 		goto out;
 	}
 
+#if defined(CONFIG_CRC)
 	{
 		static uint8_t dnm_rx_readback_buf[1500];
 		struct net_pkt_cursor backup;
@@ -616,7 +634,7 @@ void *net_pkt_from_nbuf(void *iface, void *frm)
 		}
 		net_pkt_cursor_restore(pkt, &backup);
 	}
-
+#endif
 out:
 	zep_shim_nbuf_free(nwb);
 	return pkt;
