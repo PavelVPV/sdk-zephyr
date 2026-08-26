@@ -258,7 +258,8 @@ static int zep_shim_pr_dbg(const char *fmt, va_list args)
 
 static int zep_shim_pr_info(const char *fmt, va_list args)
 {
-	static char buf[80];
+	/* dnm: bumped from 80 to fit the wider rx-data hexdump debug logs */
+	static char buf[320];
 
 	vsnprintf(buf, sizeof(buf), fmt, args);
 
