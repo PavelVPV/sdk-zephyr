@@ -255,18 +255,30 @@ static void zephyr_wpa_supplicant_msg(void *ctx, const char *txt, size_t len)
 #ifdef CONFIG_WIFI_NM_WPA_SUPPLICANT_PRINT_PMK
 	/* Zephyr-side alternative to patching hostap directly (see
 	 * zephyrproject-rtos/hostap#154 review discussion). This callback is
-	 * hostap's generic wpa_msg() sink - registered as such, confirmed by
-	 * "CTRL-EVENT-CONNECTED" actually arriving here in practice - so hook
-	 * the print here instead of supplicant_send_wifi_mgmt_conn_event(),
-	 * which despite looking like the right place, has zero callers in
-	 * this tree and never fires.
+	 * hostap's generic wpa_msg() sink and fires on every wpa_msg() call,
+	 * not specifically on "CTRL-EVENT-CONNECTED" - logging wpa_state on
+	 * every call showed it was never exactly WPA_COMPLETED at the point
+	 * that string fires. Track the previous state instead and print on
+	 * the actual rising edge into WPA_COMPLETED, on whichever call
+	 * happens to observe it first.
+	 *
+	 * Uses a single static var, so with more than one interface a second
+	 * interface's completion can be missed if the first is already
+	 * WPA_COMPLETED - acceptable for this debug-only, single-STA-focused
+	 * feature.
 	 */
-	if (strncmp(txt, "CTRL-EVENT-CONNECTED", 20) == 0 &&
-	    wpa_s->wpa_state == WPA_COMPLETED && wpa_s->wpa) {
-		char pmk_hex[2 * PMK_LEN_MAX + 1];
+	{
+		static enum wpa_states prev_state = WPA_DISCONNECTED;
 
-		wpa_snprintf_hex(pmk_hex, sizeof(pmk_hex), wpa_s->wpa->pmk, wpa_s->wpa->pmk_len);
-		wpa_printf(MSG_ERROR, "WPA: PMK = %s", pmk_hex);
+		if (wpa_s->wpa_state == WPA_COMPLETED && prev_state != WPA_COMPLETED &&
+		    wpa_s->wpa) {
+			char pmk_hex[2 * PMK_LEN_MAX + 1];
+
+			wpa_snprintf_hex(pmk_hex, sizeof(pmk_hex), wpa_s->wpa->pmk,
+					 wpa_s->wpa->pmk_len);
+			wpa_printf(MSG_ERROR, "WPA: PMK = %s", pmk_hex);
+		}
+		prev_state = wpa_s->wpa_state;
 	}
 #endif /* CONFIG_WIFI_NM_WPA_SUPPLICANT_PRINT_PMK */
 
