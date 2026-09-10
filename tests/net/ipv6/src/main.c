@@ -1218,6 +1218,43 @@ struct test_dad_loop_context {
 	bool src_mac_self;
 };
 
+static bool wait_for_addr_preferred(struct net_if *iface,
+				    const struct net_in6_addr *addr,
+				    int32_t timeout_ms)
+{
+	int64_t end = k_uptime_get() + timeout_ms;
+
+	while (k_uptime_get() <= end) {
+		struct net_if_addr *ifaddr;
+
+		ifaddr = net_if_ipv6_addr_lookup_by_iface(iface, addr);
+		if (ifaddr && ifaddr->addr_state == NET_ADDR_PREFERRED) {
+			return true;
+		}
+
+		k_sleep(K_MSEC(10));
+	}
+
+	return false;
+}
+
+static bool wait_for_addr_removed(struct net_if *iface,
+				  const struct net_in6_addr *addr,
+				  int32_t timeout_ms)
+{
+	int64_t end = k_uptime_get() + timeout_ms;
+
+	while (k_uptime_get() <= end) {
+		if (!net_if_ipv6_addr_lookup_by_iface(iface, addr)) {
+			return true;
+		}
+
+		k_sleep(K_MSEC(10));
+	}
+
+	return false;
+}
+
 static void expect_dad_ns(struct net_pkt *pkt, void *user_data)
 {
 	uint32_t res_bytes;
@@ -1925,12 +1962,8 @@ ZTEST(net_ipv6, test_dad_self_loop_nonce_ignored)
 	zassert_ok(k_sem_take(&ctx.wait_dad, K_MSEC(WAIT_TIME)),
 		   "Timeout while waiting for DAD NS");
 
-	k_sleep(K_MSEC(150));
-
-	ifaddr = net_if_ipv6_addr_lookup_by_iface(TEST_NET_IF, &addr);
-	zassert_not_null(ifaddr, "Address should remain after nonce self-loop");
-	zassert_equal(ifaddr->addr_state, NET_ADDR_PREFERRED,
-		      "Address should be preferred after DAD");
+	zassert_true(wait_for_addr_preferred(TEST_NET_IF, &addr, 1000),
+		     "Address should be preferred after DAD");
 	net_if_ipv6_addr_rm(TEST_NET_IF, &addr);
 #endif
 }
@@ -1961,12 +1994,8 @@ ZTEST(net_ipv6, test_dad_self_loop_mac_ignored)
 	zassert_ok(k_sem_take(&ctx.wait_dad, K_MSEC(WAIT_TIME)),
 		   "Timeout while waiting for DAD NS");
 
-	k_sleep(K_MSEC(150));
-
-	ifaddr = net_if_ipv6_addr_lookup_by_iface(TEST_NET_IF, &addr);
-	zassert_not_null(ifaddr, "Address should remain after MAC self-loop");
-	zassert_equal(ifaddr->addr_state, NET_ADDR_PREFERRED,
-		      "Address should be preferred after DAD");
+	zassert_true(wait_for_addr_preferred(TEST_NET_IF, &addr, 1000),
+		     "Address should be preferred after DAD");
 	net_if_ipv6_addr_rm(TEST_NET_IF, &addr);
 #endif
 }
@@ -1997,11 +2026,8 @@ ZTEST(net_ipv6, test_dad_self_loop_long_nonce_not_matched)
 	zassert_ok(k_sem_take(&ctx.wait_dad, K_MSEC(WAIT_TIME)),
 		   "Timeout while waiting for DAD NS");
 
-	/* Let DAD handler process reflected NS and fail the tentative address. */
-	k_sleep(K_MSEC(150));
-
-	ifaddr = net_if_ipv6_addr_lookup_by_iface(TEST_NET_IF, &addr);
-	zassert_is_null(ifaddr, "Long nonce option must not trigger self-match");
+	zassert_true(wait_for_addr_removed(TEST_NET_IF, &addr, 1000),
+		     "Long nonce option must not trigger self-match");
 #endif
 }
 
