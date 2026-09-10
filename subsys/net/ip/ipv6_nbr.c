@@ -1440,7 +1440,12 @@ static enum net_verdict handle_ns_input(struct net_icmp_ctx *ctx,
 				goto drop;
 			}
 
-			ns_dad_nonce_present = true;
+			/* RFC7527 nonce matching is only defined for 8-byte
+			 * ND option format (len == 1, 6-byte payload).
+			 */
+			if (nd_opt_hdr->len == 1U) {
+				ns_dad_nonce_present = true;
+			}
 			break;
 		default:
 			NET_DBG("Unknown ND option 0x%x", nd_opt_hdr->type);
