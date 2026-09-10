@@ -1215,7 +1215,7 @@ static bool read_dad_nonce_opt(struct net_pkt *pkt,
 			       uint8_t len,
 			       uint8_t nonce[NET_IPV6_DAD_NONCE_LEN])
 {
-	uint8_t opt_len = len * 8U;
+	size_t opt_len = (size_t)len * 8U;
 
 	if (opt_len < NET_IPV6_DAD_NONCE_OPT_LEN) {
 		return false;
