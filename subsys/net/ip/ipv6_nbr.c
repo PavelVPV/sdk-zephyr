@@ -58,8 +58,10 @@ LOG_MODULE_REGISTER(net_ipv6_nd, CONFIG_NET_IPV6_ND_LOG_LEVEL);
  */
 #define MIN_IPV6_MTU NET_IPV6_MTU
 #define MAX_IPV6_MTU 0xffff
+#if defined(CONFIG_NET_IPV6_DAD)
 #define NET_IPV6_DAD_NONCE_LEN 6U
 #define NET_IPV6_DAD_NONCE_OPT_LEN 8U
+#endif /* CONFIG_NET_IPV6_DAD */
 
 #if defined(CONFIG_NET_IPV6_NBR_CACHE) || defined(CONFIG_NET_IPV6_ND)
 /* Global stale counter, whenever ipv6 neighbor enters into
@@ -1195,6 +1197,7 @@ static bool read_llao(struct net_pkt *pkt,
 	return true;
 }
 
+#if defined(CONFIG_NET_IPV6_DAD)
 static bool set_dad_nonce_opt(struct net_pkt *pkt,
 			      const uint8_t nonce[NET_IPV6_DAD_NONCE_LEN])
 {
@@ -1233,6 +1236,7 @@ static bool read_dad_nonce_opt(struct net_pkt *pkt,
 
 	return true;
 }
+#endif /* CONFIG_NET_IPV6_DAD */
 
 int net_ipv6_send_na(struct net_if *iface, const struct net_in6_addr *src,
 		     const struct net_in6_addr *dst, const struct net_in6_addr *tgt,
@@ -1353,8 +1357,10 @@ static enum net_verdict handle_ns_input(struct net_icmp_ctx *ctx,
 	struct net_in6_addr *tgt;
 	struct net_in6_addr ns_tgt, ns_src, ns_dst;
 	struct net_linkaddr src_lladdr;
+#if defined(CONFIG_NET_IPV6_DAD)
 	uint8_t ns_dad_nonce[NET_IPV6_DAD_NONCE_LEN];
 	bool ns_dad_nonce_present = false;
+#endif
 	struct net_pkt_cursor backup;
 	int ret;
 
@@ -1433,6 +1439,7 @@ static enum net_verdict handle_ns_input(struct net_icmp_ctx *ctx,
 			}
 
 			break;
+#if defined(CONFIG_NET_IPV6_DAD)
 		case NET_ICMPV6_ND_OPT_NONCE:
 			if (!read_dad_nonce_opt(pkt, nd_opt_hdr->len,
 						ns_dad_nonce)) {
@@ -1447,6 +1454,7 @@ static enum net_verdict handle_ns_input(struct net_icmp_ctx *ctx,
 				ns_dad_nonce_present = true;
 			}
 			break;
+#endif
 		default:
 			NET_DBG("Unknown ND option 0x%x", nd_opt_hdr->type);
 			break;
@@ -2180,7 +2188,9 @@ int net_ipv6_send_ns(struct net_if *iface,
 	struct net_icmpv6_ns_hdr *ns_hdr;
 	struct net_in6_addr node_dst;
 	struct net_nbr *nbr;
+#if defined(CONFIG_NET_IPV6_DAD)
 	struct net_if_addr *ifaddr = NULL;
+#endif
 	uint8_t llao_len;
 
 	if (!dst) {
@@ -2193,10 +2203,12 @@ int net_ipv6_send_ns(struct net_if *iface,
 	if (is_my_address) {
 		src = net_ipv6_unspecified_address();
 		llao_len = 0U;
+#if defined(CONFIG_NET_IPV6_DAD)
 		ifaddr = net_if_ipv6_addr_lookup_by_iface(iface, tgt);
 		if (ifaddr) {
 			sys_rand_get(ifaddr->dad_nonce, NET_IPV6_DAD_NONCE_LEN);
 		}
+#endif
 	} else {
 		if (!src) {
 			src = net_if_ipv6_select_src_addr(iface, tgt);
@@ -2213,9 +2225,12 @@ int net_ipv6_send_ns(struct net_if *iface,
 
 	pkt = net_pkt_alloc_with_buffer(iface,
 					sizeof(struct net_icmpv6_ns_hdr) +
-					llao_len +
-					(is_my_address ?
-					 NET_IPV6_DAD_NONCE_OPT_LEN : 0U),
+					llao_len
+#if defined(CONFIG_NET_IPV6_DAD)
+					+ (is_my_address ?
+					   NET_IPV6_DAD_NONCE_OPT_LEN : 0U)
+#endif
+					,
 					NET_AF_INET6, NET_IPPROTO_ICMPV6,
 					ND_NET_BUF_TIMEOUT);
 	if (!pkt) {
@@ -2252,10 +2267,12 @@ int net_ipv6_send_ns(struct net_if *iface,
 			      llao_len, NET_ICMPV6_ND_OPT_SLLAO)) {
 			goto drop;
 		}
+#if defined(CONFIG_NET_IPV6_DAD)
 	} else if (ifaddr) {
 		if (!set_dad_nonce_opt(pkt, ifaddr->dad_nonce)) {
 			goto drop;
 		}
+#endif
 	}
 
 	net_pkt_cursor_init(pkt);
