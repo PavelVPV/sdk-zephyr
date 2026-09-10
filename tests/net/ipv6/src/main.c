@@ -348,13 +348,16 @@ static void inject_na_message(struct net_if *iface, struct net_in6_addr *src,
 }
 
 static void inject_dad_ns_loopback(struct net_if *iface,
-				   const struct net_in6_addr *target)
+				   const struct net_in6_addr *target,
+				   const uint8_t *nonce,
+				   bool include_nonce)
 {
 	struct net_eth_hdr hdr;
 	struct net_pkt *pkt;
 	struct net_in6_addr dst;
 	const struct net_in6_addr *src;
 	uint32_t reserved = 0U;
+	uint8_t nonce_opt[8];
 
 	pkt = net_pkt_alloc_with_buffer(iface, TEST_MSG_SIZE, NET_AF_INET6,
 					NET_IPPROTO_ICMPV6, K_NO_WAIT);
@@ -381,6 +384,14 @@ static void inject_dad_ns_loopback(struct net_if *iface,
 	zassert_ok(net_icmpv6_create(pkt, NET_ICMPV6_NS, 0));
 	zassert_ok(net_pkt_write_be32(pkt, reserved));
 	zassert_ok(net_pkt_write(pkt, target, sizeof(struct net_in6_addr)));
+
+	if (include_nonce) {
+		zassert_not_null(nonce, "Missing DAD nonce");
+		nonce_opt[0] = NET_ICMPV6_ND_OPT_NONCE;
+		nonce_opt[1] = 1U;
+		memcpy(&nonce_opt[2], nonce, sizeof(nonce_opt) - 2U);
+		zassert_ok(net_pkt_write(pkt, nonce_opt, sizeof(nonce_opt)));
+	}
 
 	net_pkt_cursor_init(pkt);
 	net_ipv6_finalize(pkt, NET_IPPROTO_ICMPV6);
@@ -1191,6 +1202,7 @@ struct test_dad_context {
 struct test_dad_loop_context {
 	struct k_sem wait_dad;
 	struct net_in6_addr *exp_dad_addr;
+	bool include_nonce;
 };
 
 static void expect_dad_ns(struct net_pkt *pkt, void *user_data)
@@ -1230,7 +1242,19 @@ static void expect_dad_ns_loopback(struct net_pkt *pkt, void *user_data)
 		   "Failed to read target address");
 
 	if (net_ipv6_addr_cmp(ctx->exp_dad_addr, &target)) {
-		inject_dad_ns_loopback(net_pkt_iface(pkt), &target);
+		const uint8_t *nonce = NULL;
+
+		if (ctx->include_nonce) {
+			struct net_if_addr *ifaddr;
+
+			ifaddr = net_if_ipv6_addr_lookup_by_iface(net_pkt_iface(pkt),
+								  &target);
+			zassert_not_null(ifaddr, "DAD address missing during loopback injection");
+			nonce = ifaddr->dad_nonce;
+		}
+
+		inject_dad_ns_loopback(net_pkt_iface(pkt), &target,
+				       nonce, ctx->include_nonce);
 		k_sem_give(&ctx->wait_dad);
 	}
 }
@@ -1861,13 +1885,48 @@ ZTEST(net_ipv6, test_dad_conflict)
 	zassert_is_null(ifaddr, "Address should not be present on the interface");
 }
 
+ZTEST(net_ipv6, test_dad_self_loop_nonce_ignored)
+{
+#if defined(CONFIG_NET_IPV6_DAD)
+	static struct net_in6_addr addr = { { { 0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0,
+				     0, 0, 0, 0, 0, 0, 0x99, 0x5 } } };
+	static struct test_dad_loop_context ctx = {
+		.exp_dad_addr = &addr,
+		.include_nonce = true
+	};
+	static struct test_ns_handler handler = {
+		.fn = expect_dad_ns_loopback,
+		.user_data = &ctx
+	};
+	struct net_if_addr *ifaddr;
+
+	k_sem_init(&ctx.wait_dad, 0, 1);
+	ns_handler = &handler;
+
+	ifaddr = net_if_ipv6_addr_add(TEST_NET_IF, &addr, NET_ADDR_AUTOCONF, 0xffff);
+	zassert_not_null(ifaddr, "Address cannot be added");
+
+	zassert_ok(k_sem_take(&ctx.wait_dad, K_MSEC(WAIT_TIME)),
+		   "Timeout while waiting for DAD NS");
+
+	k_sleep(K_MSEC(150));
+
+	ifaddr = net_if_ipv6_addr_lookup_by_iface(TEST_NET_IF, &addr);
+	zassert_not_null(ifaddr, "Address should remain after nonce self-loop");
+	zassert_equal(ifaddr->addr_state, NET_ADDR_PREFERRED,
+		      "Address should be preferred after DAD");
+	net_if_ipv6_addr_rm(TEST_NET_IF, &addr);
+#endif
+}
+
 ZTEST(net_ipv6, test_dad_self_loop_mac_ignored)
 {
 #if defined(CONFIG_NET_IPV6_DAD)
 	static struct net_in6_addr addr = { { { 0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0,
 				     0, 0, 0, 0, 0, 0, 0x99, 0x6 } } };
 	static struct test_dad_loop_context ctx = {
-		.exp_dad_addr = &addr
+		.exp_dad_addr = &addr,
+		.include_nonce = false
 	};
 	static struct test_ns_handler handler = {
 		.fn = expect_dad_ns_loopback,
