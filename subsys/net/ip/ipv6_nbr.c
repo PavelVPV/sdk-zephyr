@@ -2558,6 +2558,7 @@ static inline void handle_prefix_autonomous(struct net_pkt *pkt,
 		if (prefix_info->valid_lifetime ==
 		    NET_IPV6_ND_INFINITE_LIFETIME) {
 			net_if_addr_set_lf(ifaddr, true);
+			NET_INFO("Received: %s", net_sprint_ipv6_addr(&addr));
 			return;
 		}
 
@@ -2582,6 +2583,7 @@ static inline void handle_prefix_autonomous(struct net_pkt *pkt,
 		}
 
 		net_if_addr_set_lf(ifaddr, false);
+		NET_INFO("Received: %s", net_sprint_ipv6_addr(&addr));
 	} else {
 		if (prefix_info->valid_lifetime ==
 		    NET_IPV6_ND_INFINITE_LIFETIME) {
@@ -2591,6 +2593,8 @@ static inline void handle_prefix_autonomous(struct net_pkt *pkt,
 			net_if_ipv6_addr_add(iface, &addr, NET_ADDR_AUTOCONF,
 					     prefix_info->valid_lifetime);
 		}
+
+		NET_INFO("Received: %s", net_sprint_ipv6_addr(&addr));
 	}
 
 	/* If privacy extensions are enabled, then start the procedure for that
