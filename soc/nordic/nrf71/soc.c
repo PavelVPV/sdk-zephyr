@@ -294,8 +294,8 @@ static void hfxo64m_setup(void)
  */
 static void hfxo64m_start(void)
 {
-	NRF_CLOCK->EVENTS_XOSTARTED = 0;
-	NRF_CLOCK->TASKS_XOSTART =
+	NRF_CLOCK_NS->EVENTS_XOSTARTED = 0;
+	NRF_CLOCK_NS->TASKS_XOSTART =
 		(CLOCK_TASKS_XOSTART_TASKS_XOSTART_Trigger << CLOCK_TASKS_XOSTART_TASKS_XOSTART_Pos);
 
 	/* Wait until the crystal has started. */
