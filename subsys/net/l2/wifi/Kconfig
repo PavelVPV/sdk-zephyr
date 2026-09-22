@@ -72,6 +72,19 @@ config WIFI_SHELL_MAX_AP_STA
 	  This option defines the maximum number of APs and STAs that can be managed
 	  in Wi-Fi shell.
 
+config WIFI_SHELL_SCAN_MAX_BSS_CNT
+	int "Default maximum number of Wi-Fi scan results"
+	depends on NET_L2_WIFI_SHELL
+	range 0 $(UINT16_MAX)
+	default 5
+	help
+	  Maximum number of scan results returned by the Wi-Fi shell when
+	  --max_bss is not specified. A value of 0 means no limit.
+	  A value of 0 or a limit higher than the default might cause network
+	  management events to be dropped. Adjust
+	  CONFIG_NET_MGMT_EVENT_QUEUE_TIMEOUT or
+	  CONFIG_NET_MGMT_EVENT_QUEUE_SIZE if needed.
+
 config WIFI_P2P_MAX_PEERS
 	int "Maximum number of P2P peers that can be returned in a single query"
 	depends on WIFI_NM_WPA_SUPPLICANT_P2P
