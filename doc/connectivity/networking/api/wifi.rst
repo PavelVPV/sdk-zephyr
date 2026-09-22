@@ -42,6 +42,43 @@ as a hint for drivers to limit the functionality that needs to be compiled in. T
 
     Support for a requested usage mode is hardware dependent.
 
+Wi-Fi shell
+***********
+
+The Wi-Fi shell provides commands for testing and exploring the Wi-Fi management API through an
+interactive interface, without requiring a dedicated application.
+Enable the :kconfig:option:`CONFIG_NET_L2_WIFI_SHELL` option to add the ``wifi`` command.
+
+The main Wi-Fi shell subcommands include:
+
+.. list-table:: Wi-Fi shell subcommands
+   :header-rows: 1
+
+   * - Subcommand
+     - Description
+   * - ``scan``
+     - Scan for Wi-Fi networks.
+   * - ``connect``
+     - Connect to a Wi-Fi network.
+   * - ``disconnect``
+     - Disconnect from a Wi-Fi network.
+   * - ``status``
+     - Show the Wi-Fi interface status.
+
+Use ``wifi --help`` to list all available subcommands and ``wifi <subcommand> --help`` for
+command-specific help.
+See :zephyr:code-sample:`wifi-shell` for a sample application that enables the Wi-Fi shell.
+
+.. warning::
+
+   The :kconfig:option:`CONFIG_WIFI_SHELL_SCAN_MAX_BSS_CNT` option limits the number of scan
+   results returned by default.
+   A value of 0 means no limit.
+   A value of 0 or a limit higher than the default might cause network management events to be
+   dropped.
+   Adjust :kconfig:option:`CONFIG_NET_MGMT_EVENT_QUEUE_TIMEOUT` or
+   :kconfig:option:`CONFIG_NET_MGMT_EVENT_QUEUE_SIZE` if needed.
+
 Wi-Fi PSA crypto supported build
 ********************************
 
