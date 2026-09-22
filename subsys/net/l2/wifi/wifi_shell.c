@@ -1168,7 +1168,9 @@ static int wifi_scan_args_to_params(const struct shell *sh,
 static int cmd_wifi_scan(const struct shell *sh, size_t argc, char *argv[])
 {
 	struct net_if *iface = get_iface(IFACE_TYPE_STA, argc, argv);
-	struct wifi_scan_params params = { 0 };
+	struct wifi_scan_params params = {
+		.max_bss_cnt = CONFIG_WIFI_SHELL_SCAN_MAX_BSS_CNT,
+	};
 	bool do_scan = true;
 	int opt_num;
 
@@ -4893,7 +4895,10 @@ SHELL_SUBCMD_ADD((wifi), scan, NULL,
 			    "Passive scan dwell time (in ms) on a channel. "
 			    "Range 10 ms to 1000 ms\n"
 			    "[-s, --ssid] : SSID to scan for. Can be provided multiple times\n"
-			    "[-m, --max_bss <val>] : Maximum BSSes to scan for. Range 1 - 65535\n"
+			    "[-m, --max_bss <val>] : Maximum BSSes to scan for. "
+			    "Range 0 - 65535; 0 means no limit. "
+			    "Using 0 or a value higher than the default might cause "
+			    "network event drop warnings\n"
 			    "[-c, --chans <Comma separated list of channel ranges>] : "
 			    "Channels to be scanned. The channels must be specified in the form "
 			    "band1:chan1,chan2_band2:chan3,..etc. band1, band2 must be valid band "
