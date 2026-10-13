@@ -14,7 +14,8 @@ config SOC_FLASH_NRF_MRAMC
 	select FLASH_HAS_NO_EXPLICIT_ERASE
 	imply MPU_ALLOW_FLASH_WRITE if ARM_MPU
 	help
-	  Enables Nordic Semiconductor flash driver for MRAMC in direct write mode.
+	  Enables the Nordic Semiconductor MRAMC flash driver. The driver erases
+	  non-erased words in direct mode before programming them in normal mode.
 
 config NRF_MRAMC_REGION_ADDRESS_RESOLUTION
 	hex

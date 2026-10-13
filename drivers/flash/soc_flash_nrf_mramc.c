@@ -31,10 +31,11 @@ BUILD_ASSERT(MRAM_SIZE <= UINT32_MAX, "MRAM_SIZE is not in size of uint32_t");
 #define WRITE_BLOCK_SIZE  DT_PROP(MRAM_NODE, write_block_size)
 #define ERASE_BLOCK_SIZE  DT_PROP(MRAM_NODE, erase_block_size)
 
-#define ERASE_VALUE				   0xFFFFFFFF
-#define MRAM_WORD_SIZE	16
-#define MRAMC_CONFIG_WEN_NORMAL	1
-#define MRAMC_CONFIG_WEN_DISABLE   0
+#define ERASE_VALUE              0xFFFFFFFF
+#define MRAM_WORD_SIZE           16
+#define MRAMC_CONFIG_WEN_NORMAL  1
+#define MRAMC_CONFIG_WEN_DIRECT  2
+#define MRAMC_CONFIG_WEN_DISABLE 0
 
 #define MAP_TO_ADDR(offset) (MRAM_BASE + offset)
 
@@ -86,15 +87,15 @@ static bool validate_action(uint32_t addr, size_t len, bool must_align)
 /**
  * @brief Verifies the data written to MRAM.
  *
- * @param[in] offset   Offset of mram memory from base address.
+ * @param[in] addr     Address of MRAM memory.
  * @param[in] len	   Number of bytes for the intended operation.
  * @param[in] is_erase Whether is verifying erase operation.
  *
  * @return true if the address and length are valid, false otherwise.
  */
-static int nrf_mramc_verify_data(off_t offset, const void *data, size_t size, bool is_erase)
+static int nrf_mramc_verify_data(uint32_t addr, const void *data, size_t size, bool is_erase)
 {
-	uint32_t *mram_start = (uint32_t *) MAP_TO_ADDR(offset);
+	uint32_t *mram_start = (uint32_t *)addr;
 	uint32_t *mram_end = mram_start + size / sizeof(uint32_t);
 
 	if (is_erase) {
@@ -130,15 +131,18 @@ static int nrf_mramc_verify_data(off_t offset, const void *data, size_t size, bo
 /**
  * @brief Setting the write enable mode of MRAM controller.
  *
- * @param[in] mode  Write enable mode to set, either normal(1) or disable(0).
+ * @param[in] mode Write mode to set.
  *
- * @return true if mode change is successful, false otherwise.
+ * @return 0 on success, platform error otherwise.
  */
 static int nrf_mramc_set_wen(uint32_t mode)
 {
 #if defined(CONFIG_TRUSTED_EXECUTION_NONSECURE)
 	return tfm_platform_mramc_set_wen(mode);
 #else
+	while (!nrfx_mramc_ready_check()) {
+	}
+
 	nrfx_mramc_config_write_mode_set(mode);
 
 	while (!nrfx_mramc_ready_check()) {
@@ -180,6 +184,49 @@ static int nrf_mramc_read(const struct device *dev, off_t offset, void *data, si
 }
 
 /**
+ * @brief Erase a word with MRAM_WORD_SIZE to MRAM and verifies the written data.
+ *
+ * @param addr		Destination address. Must be aligned to MRAM_WORD_SIZE (16 bytes).
+ *
+ * @retval 0		Erase succeeded and no corruption was detected.
+ * @retval -EIO		Erase failed after all retries.
+ */
+static int nrf_mram_erase_and_verify_word(uint32_t addr)
+{
+	uint8_t retries = CONFIG_NRF_MRAMC_MAX_RETRIES;
+	int ret;
+
+	while (retries--) {
+		uint32_t *mram_start = (uint32_t *)addr;
+		uint32_t *mram_end = mram_start + sizeof(uint32_t);
+
+		ret = nrf_mramc_set_wen(MRAMC_CONFIG_WEN_DIRECT);
+		if (ret != 0) {
+			return -EIO;
+		}
+
+		while (mram_start < mram_end) {
+			*mram_start++ = 0xFFFFFFFFu;
+		}
+
+		ret = nrf_mramc_set_wen(MRAMC_CONFIG_WEN_DISABLE);
+		if (ret != 0) {
+			return -EIO;
+		}
+
+		if (!nrf_mramc_verify_data(addr, NULL, MRAM_WORD_SIZE, true)) {
+			return 0;
+		}
+		LOG_ERR("MRAM erase verification failed at address 0x%x, retrying... (%u retries "
+			"left)",
+			addr, retries);
+	}
+
+	LOG_ERR("MRAM erase failed at address 0x%x, after %u retries ", addr, retries);
+	return -EIO;
+}
+
+/**
  * @brief Writes a word with MRAM_WORD_SIZE to MRAM and verifies the written data.
  *
  * @param addr  Destination address. Must be aligned to MRAM_WORD_SIZE (16 bytes).
@@ -191,8 +238,22 @@ static int nrf_mramc_read(const struct device *dev, off_t offset, void *data, si
 static int nrf_mram_write_and_verify_word(uint32_t addr, void *data)
 {
 	uint8_t retries = CONFIG_NRF_MRAMC_MAX_RETRIES;
+	int ret;
 
 	while (retries--) {
+		/* Normal write mode requires an erased MRAM word. */
+		if (nrf_mramc_verify_data(addr, NULL, MRAM_WORD_SIZE, true) != 0) {
+			ret = nrf_mram_erase_and_verify_word(addr);
+			if (ret != 0) {
+				return ret;
+			}
+		}
+
+		ret = nrf_mramc_set_wen(MRAMC_CONFIG_WEN_NORMAL);
+		if (ret != 0) {
+			return -EIO;
+		}
+
 		/* Check if data address is aligned to 4 bytes */
 		if (((uintptr_t)data % 4) == 0) {
 			uint32_t *mram_start = (uint32_t *)addr;
@@ -208,6 +269,11 @@ static int nrf_mram_write_and_verify_word(uint32_t addr, void *data)
 			memcpy((void *)addr, data, MRAM_WORD_SIZE);
 		}
 
+		ret = nrf_mramc_set_wen(MRAMC_CONFIG_WEN_DISABLE);
+		if (ret != 0) {
+			return -EIO;
+		}
+
 		if (!nrf_mramc_verify_data(addr, data, MRAM_WORD_SIZE, false)) {
 			return 0;
 		}
@@ -216,42 +282,7 @@ static int nrf_mram_write_and_verify_word(uint32_t addr, void *data)
 			addr, retries);
 	}
 
-	LOG_ERR("MRAM write failed at address 0x%x, after %u retries ",
-		addr, retries);
-	return -EIO;
-}
-
-/**
- * @brief Erase a word with MRAM_WORD_SIZE to MRAM and verifies the written data.
- *
- * @param addr		Destination address. Must be aligned to MRAM_WORD_SIZE (16 bytes).
- *
- * @retval 0		Erase succeeded and no corruption was detected.
- * @retval -EIO		Erase failed after all retries.
- */
-static int nrf_mram_erase_and_verify_word(uint32_t addr)
-{
-	uint8_t retries = CONFIG_NRF_MRAMC_MAX_RETRIES;
-
-	while (retries--) {
-		uint32_t *mram_start = (uint32_t *)addr;
-		uint32_t *mram_end = mram_start + sizeof(uint32_t);
-
-		/* Check if data address is aligned to 4 bytes */
-		while (mram_start < mram_end) {
-			*mram_start++ = 0xFFFFFFFFu;
-		}
-
-		if (!nrf_mramc_verify_data(addr, NULL, MRAM_WORD_SIZE, true)) {
-			return 0;
-		}
-		LOG_ERR("MRAM erase verification failed at address 0x%x, retrying... (%u retries "
-			"left)",
-			addr, retries);
-	}
-
-	LOG_ERR("MRAM erase failed at address 0x%x, after %u retries ",
-		addr, retries);
+	LOG_ERR("MRAM write failed at address 0x%x, after %u retries ", addr, retries);
 	return -EIO;
 }
 
@@ -278,9 +309,7 @@ static int nrf_mramc_write(const struct device *dev, off_t offset,
 
 	for (uint32_t i = 0; i < size; i += MRAM_WORD_SIZE) {
 		/* Write full 16 bytes word for N iterations */
-		nrf_mramc_set_wen(MRAMC_CONFIG_WEN_NORMAL);
 		ret = nrf_mram_write_and_verify_word(addr + i, (void *)((uintptr_t)data + i));
-		nrf_mramc_set_wen(MRAMC_CONFIG_WEN_DISABLE);
 
 		if (ret) {
 			SYNC_UNLOCK();
@@ -314,9 +343,7 @@ static int nrf_mramc_erase(const struct device *dev, off_t offset, size_t size)
 
 	for (uint32_t i = 0; i < size; i += MRAM_WORD_SIZE) {
 		/* Erase full 16 bytes word for N iterations */
-		nrf_mramc_set_wen(MRAMC_CONFIG_WEN_NORMAL);
 		ret = nrf_mram_erase_and_verify_word(addr + i);
-		nrf_mramc_set_wen(MRAMC_CONFIG_WEN_DISABLE);
 
 		if (ret) {
 			SYNC_UNLOCK();
