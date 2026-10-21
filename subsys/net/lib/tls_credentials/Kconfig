@@ -60,6 +60,35 @@ config TLS_CREDENTIAL_FILENAMES
 	  This option is currently only available for secure
 	  socket offload devices.
 
+config TLS_CREDENTIALS_KEYGEN
+	bool "On-device private key and CSR generation [EXPERIMENTAL]"
+	select EXPERIMENTAL
+	select MBEDTLS
+	select MBEDTLS_PK_PARSE_C
+	select MBEDTLS_PK_WRITE_C
+	select MBEDTLS_X509_CSR_WRITE_C
+	select PSA_WANT_KEY_TYPE_ECC_KEY_PAIR_GENERATE
+	select PSA_WANT_KEY_TYPE_ECC_PUBLIC_KEY
+	select PSA_WANT_ALG_ECDSA
+	select PSA_WANT_ALG_SHA_256
+	select PSA_WANT_ECC_SECP_R1_256
+	help
+	  Generate a TLS device private key on the device using the PSA Crypto API. The key is a
+	  persistent, non-exportable ECC P-256 key and is referenced for TLS by its PSA key ID
+	  (TLS_CREDENTIAL_PRIVATE_KEY_PSA), so the private key never leaves the device. A
+	  Certificate Signing Request (CSR) signed by the key can be generated for a certificate
+	  authority. The key must be registered with the TLS credentials module after every
+	  boot, see tls_credentials_key_restore().
+
+config TLS_CREDENTIALS_KEYGEN_VERIFY
+	bool "Export the on-device public key for verification"
+	depends on TLS_CREDENTIALS_KEYGEN
+	default y
+	help
+	  Provide an API to export the public key of the on-device key pair. The private key is
+	  non-exportable, so host tools use the public key to verify that the on-device key
+	  matches the installed device certificate. Disable to save a small amount of code.
+
 source "subsys/net/lib/tls_credentials/Kconfig.shell"
 
 endif # TLS_CREDENTIALS
