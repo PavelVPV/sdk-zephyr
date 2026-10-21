@@ -239,6 +239,36 @@ The following keywords (case-insensitive) may be used to specify a credential ty
 
 .. _tls_credentials_shell_data_formats:
 
+On-Device Key Generation (``key``)
+==================================
+
+Generate a private key on the device and a Certificate Signing Request (CSR) signed by it.
+The private key never leaves the device.
+These commands require :kconfig:option:`CONFIG_TLS_CREDENTIALS_KEYGEN`.
+The ``pubkey`` command also requires :kconfig:option:`CONFIG_TLS_CREDENTIALS_KEYGEN_VERIFY`.
+
+Usage
+-----
+
+.. code-block:: console
+
+   cred key generate <SECTAG>
+   cred key csr <SECTAG> <SUBJECT>
+   cred key pubkey <SECTAG>
+   cred key delete <SECTAG>
+
+- ``generate`` creates the key.
+  It fails if a key already exists for the sectag.
+- ``csr`` prints the CSR as ``CSR: <base64 DER>`` followed by ``CSR generation complete``.
+  ``<SUBJECT>`` is an X.509 subject name, for example ``"CN=my-device,O=Nordic"``.
+- ``pubkey`` prints the public key as ``PUBKEY: <base64 SEC1 point>`` followed by
+  ``Public key export complete``.
+  Compare it with the public key of the installed device certificate to check that they match.
+- ``delete`` destroys the key.
+
+To rotate the key, delete it and generate a new one.
+The previously issued device certificate no longer matches the new key.
+
 Storage/Retrieval Formats
 *************************
 

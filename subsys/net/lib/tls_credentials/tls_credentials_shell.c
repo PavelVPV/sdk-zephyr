@@ -15,6 +15,7 @@ LOG_MODULE_REGISTER(tls_credentials_shell, CONFIG_TLS_CREDENTIALS_LOG_LEVEL);
 #include <zephyr/shell/shell.h>
 #include <zephyr/sys/base64.h>
 #include <zephyr/net/tls_credentials.h>
+#include <zephyr/net/tls_credentials_keygen.h>
 #include "tls_internal.h"
 #include <string.h>
 #include <strings.h>
@@ -886,6 +887,159 @@ cleanup:
 	return 0;
 }
 
+#if defined(CONFIG_TLS_CREDENTIALS_SHELL_KEYGEN)
+
+/* DER-encoded P-256 CSR is well under this size. */
+#define KEYGEN_CSR_DER_BUF_SIZE 512
+/* SEC1 uncompressed P-256 public key: 0x04 || X || Y. */
+#define KEYGEN_PUBKEY_RAW_SIZE  65
+
+/* Base64-encoded size, including the NUL terminator, of n raw bytes. */
+#define BASE64_ENCODED_SIZE(n) ((((n) + 2) / 3) * 4 + 1)
+
+/* Shared Base64 output buffer, sized for whichever of the CSR or the public key encodes larger. */
+#define KEYGEN_B64_BUF_SIZE MAX(BASE64_ENCODED_SIZE(KEYGEN_CSR_DER_BUF_SIZE), \
+				BASE64_ENCODED_SIZE(KEYGEN_PUBKEY_RAW_SIZE))
+
+static uint8_t keygen_csr_der_buf[KEYGEN_CSR_DER_BUF_SIZE];
+static char keygen_b64_buf[KEYGEN_B64_BUF_SIZE];
+
+/* Host tools capture the output of the commands below, so the markers are a contract:
+ * "Generated device key", "CSR:" and "CSR generation complete", "PUBKEY:" and
+ * "Public key export complete", and "Deleted device key".
+ */
+
+static int tls_cred_cmd_key_generate(const struct shell *sh, size_t argc, char *argv[])
+{
+	sec_tag_t sectag;
+	int err = shell_parse_cred_sectag(sh, argv[1], &sectag, false);
+
+	if (err) {
+		return err;
+	}
+
+	err = tls_credentials_key_generate(sectag);
+	if (err == -EALREADY) {
+		shell_warn(sh, "Key already exists in sec tag %d. Use 'delete' to remove it first.",
+			   sectag);
+		return err;
+	} else if (err) {
+		shell_error(sh, "Key generation failed: %d", err);
+		return err;
+	}
+
+	shell_print(sh, "Generated device key in sec tag %d", sectag);
+
+	return 0;
+}
+
+static int tls_cred_cmd_key_csr(const struct shell *sh, size_t argc, char *argv[])
+{
+	sec_tag_t sectag;
+	size_t der_len;
+	size_t b64_len;
+	int err = shell_parse_cred_sectag(sh, argv[1], &sectag, false);
+
+	if (err) {
+		return err;
+	}
+
+	err = tls_credentials_csr_generate(sectag, argv[2], keygen_csr_der_buf,
+					   sizeof(keygen_csr_der_buf), &der_len);
+	if (err) {
+		shell_error(sh, "CSR generation failed: %d", err);
+		return err;
+	}
+
+	err = base64_encode(keygen_b64_buf, sizeof(keygen_b64_buf), &b64_len, keygen_csr_der_buf,
+			    der_len);
+	if (err) {
+		shell_error(sh, "Base64 encoding failed: %d", err);
+		return err;
+	}
+
+	keygen_b64_buf[b64_len] = '\0';
+	shell_print(sh, "CSR: %s", keygen_b64_buf);
+	shell_print(sh, "CSR generation complete");
+
+	return 0;
+}
+
+static int tls_cred_cmd_key_delete(const struct shell *sh, size_t argc, char *argv[])
+{
+	sec_tag_t sectag;
+	int err = shell_parse_cred_sectag(sh, argv[1], &sectag, false);
+
+	if (err) {
+		return err;
+	}
+
+	err = tls_credentials_key_delete(sectag);
+	if (err) {
+		shell_error(sh, "Key deletion failed: %d", err);
+		return err;
+	}
+
+	shell_print(sh, "Deleted device key in sec tag %d", sectag);
+
+	return 0;
+}
+
+#if defined(CONFIG_TLS_CREDENTIALS_KEYGEN_VERIFY)
+static int tls_cred_cmd_key_pubkey(const struct shell *sh, size_t argc, char *argv[])
+{
+	sec_tag_t sectag;
+	uint8_t pubkey_raw[KEYGEN_PUBKEY_RAW_SIZE];
+	size_t raw_len;
+	size_t b64_len;
+	int err = shell_parse_cred_sectag(sh, argv[1], &sectag, false);
+
+	if (err) {
+		return err;
+	}
+
+	err = tls_credentials_pubkey_get(sectag, pubkey_raw, sizeof(pubkey_raw), &raw_len);
+	if (err) {
+		shell_error(sh, "Public key export failed: %d", err);
+		return err;
+	}
+
+	err = base64_encode(keygen_b64_buf, sizeof(keygen_b64_buf), &b64_len, pubkey_raw, raw_len);
+	if (err) {
+		shell_error(sh, "Base64 encoding failed: %d", err);
+		return err;
+	}
+
+	keygen_b64_buf[b64_len] = '\0';
+	shell_print(sh, "PUBKEY: %s", keygen_b64_buf);
+	shell_print(sh, "Public key export complete");
+
+	return 0;
+}
+#endif /* CONFIG_TLS_CREDENTIALS_KEYGEN_VERIFY */
+
+SHELL_STATIC_SUBCMD_SET_CREATE(tls_cred_key_cmds,
+	SHELL_CMD_ARG(generate, NULL,
+		      "Generate a device private key.\n"
+		      "Usage: cred key generate <sectag>",
+		      tls_cred_cmd_key_generate, 2, 0),
+	SHELL_CMD_ARG(csr, NULL,
+		      "Generate and print a Base64 DER CSR signed by the device key.\n"
+		      "Usage: cred key csr <sectag> <subject>, for example \"CN=my-device,O=Nordic\"",
+		      tls_cred_cmd_key_csr, 3, 0),
+	SHELL_CMD_ARG(delete, NULL,
+		      "Delete the device private key.\n"
+		      "Usage: cred key delete <sectag>",
+		      tls_cred_cmd_key_delete, 2, 0),
+	SHELL_COND_CMD_ARG(CONFIG_TLS_CREDENTIALS_KEYGEN_VERIFY, pubkey, NULL,
+			   "Export and print the device public key (Base64).\n"
+			   "Usage: cred key pubkey <sectag>",
+			   tls_cred_cmd_key_pubkey, 2, 0),
+	SHELL_SUBCMD_SET_END
+);
+
+#endif /* CONFIG_TLS_CREDENTIALS_SHELL_KEYGEN */
+
 SHELL_STATIC_SUBCMD_SET_CREATE(tls_cred_buf_cmds,
 	SHELL_CMD(clear, NULL, "Clear the credential buffer", tls_cred_cmd_buf_clear),
 	SHELL_CMD(load, NULL, "Load credential directly to buffer so it can be added.",
@@ -907,6 +1061,8 @@ SHELL_STATIC_SUBCMD_SET_CREATE(tls_cred_cmds,
 	SHELL_CMD_ARG(list, NULL, "List stored TLS credentials, optionally filtering by type "
 				  "or sectag.",
 		      tls_cred_cmd_list, 1, 2),
+	SHELL_COND_CMD(CONFIG_TLS_CREDENTIALS_SHELL_KEYGEN, key, &tls_cred_key_cmds,
+		       "Generate and manage an on-device private key and its CSR.", NULL),
 	SHELL_SUBCMD_SET_END
 );
 

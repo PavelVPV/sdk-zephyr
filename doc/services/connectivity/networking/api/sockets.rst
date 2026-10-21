@@ -369,3 +369,23 @@ TLS Credentials
 ===============
 
 .. doxygengroup:: tls_credentials
+
+TLS Credentials On-Device Key Generation
+========================================
+
+A device can generate its own TLS private key with the PSA Crypto API and create a Certificate
+Signing Request (CSR) for it, so the private key never leaves the device.
+Enable the feature with :kconfig:option:`CONFIG_TLS_CREDENTIALS_KEYGEN`.
+The key is a persistent, non-exportable ECC P-256 key.
+It is referenced for TLS by its PSA key ID, which is derived from the security tag, through
+:c:enumerator:`TLS_CREDENTIAL_PRIVATE_KEY_PSA`.
+
+The registration with the TLS credentials module is not persistent.
+Call :c:func:`tls_credentials_key_restore` after every boot, before the key is used in a TLS
+connection.
+Only one security tag can hold a registered on-device key at a time.
+
+The :ref:`TLS credentials shell <tls_credentials_shell>` provides the same functions as the
+``cred key`` commands.
+
+.. doxygengroup:: tls_credentials_keygen

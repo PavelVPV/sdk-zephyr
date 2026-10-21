@@ -32,6 +32,15 @@ config TLS_CREDENTIALS_SHELL_DIGEST_BUF_SIZE
 
 	   Also used to print error messages if digest generation fails.
 
+config TLS_CREDENTIALS_SHELL_KEYGEN
+	bool "Shell commands for on-device key and CSR generation"
+	depends on TLS_CREDENTIALS_KEYGEN
+	default y
+	help
+	  Add the 'cred key' shell commands: generate, csr, delete and, when
+	  TLS_CREDENTIALS_KEYGEN_VERIFY is enabled, pubkey. The private key never leaves the
+	  device; the CSR and the public key are printed Base64 encoded.
+
 if TLS_CREDENTIALS_BACKEND_VOLATILE
 
 config HEAP_MEM_POOL_ADD_SIZE_TLS_CRED_SHELL

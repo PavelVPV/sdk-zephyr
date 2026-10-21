@@ -10,6 +10,10 @@
 #include <zephyr/net/tls_credentials.h>
 #include <zephyr/net/tls_credentials_keygen.h>
 
+#include <zephyr/shell/shell.h>
+#include <zephyr/shell/shell_dummy.h>
+#include <zephyr/sys/base64.h>
+
 #include <psa/crypto.h>
 #include <mbedtls/x509_csr.h>
 
@@ -220,4 +224,222 @@ ZTEST(keygen_api, test_rollback_on_registration_failure)
 	for (int i = 0; i < CONFIG_TLS_MAX_CREDENTIALS_NUMBER; i++) {
 		(void)tls_credential_delete(fill_tags[i], TLS_CREDENTIAL_CA_CERTIFICATE);
 	}
+}
+
+/* ---------------------------------------------------------------------------
+ * Shell tests. Host tooling (nrfcredstore / device_credentials_installer)
+ * scrapes the command output, so the exact markers below are a contract.
+ * ---------------------------------------------------------------------------
+ */
+
+static const struct shell *dummy;
+
+static void *shell_setup(void)
+{
+	dummy = shell_backend_dummy_get_ptr();
+	WAIT_FOR(shell_ready(dummy), 20000, k_msleep(1));
+	zassert_true(shell_ready(dummy), "timed out waiting for dummy shell backend");
+	return NULL;
+}
+
+static void shell_before(void *fixture)
+{
+	ARG_UNUSED(fixture);
+	reset_state();
+	shell_backend_dummy_clear_output(dummy);
+}
+
+/* Execute a command and return the captured output. */
+static const char *run(const char *cmd, int *ret)
+{
+	size_t size;
+	int r;
+
+	shell_backend_dummy_clear_output(dummy);
+	r = shell_execute_cmd(dummy, cmd);
+	if (ret != NULL) {
+		*ret = r;
+	}
+	return shell_backend_dummy_get_output(dummy, &size);
+}
+
+/* Copy the whitespace-delimited token that follows @p prefix in @p out into
+ * @p tok. Returns the token length, or 0 if @p prefix is not found.
+ */
+static size_t token_after(const char *out, const char *prefix, char *tok, size_t tok_size)
+{
+	const char *p = strstr(out, prefix);
+	size_t i = 0;
+
+	if (p == NULL) {
+		return 0;
+	}
+	p += strlen(prefix);
+
+	while (p[i] != '\0' && p[i] != '\r' && p[i] != '\n' && p[i] != ' ' && i < tok_size - 1) {
+		tok[i] = p[i];
+		i++;
+	}
+	tok[i] = '\0';
+
+	return i;
+}
+
+/* True if every character is in the standard Base64 alphabet. */
+static bool is_base64(const char *s)
+{
+	for (; *s != '\0'; s++) {
+		char c = *s;
+
+		if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+		      (c >= '0' && c <= '9') || c == '+' || c == '/' || c == '=')) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+ZTEST_SUITE(keygen_shell, NULL, shell_setup, shell_before, NULL, NULL);
+
+ZTEST(keygen_shell, test_shell_keygen_output)
+{
+	int ret;
+	const char *out = run("cred key generate 42", &ret);
+
+	zassert_ok(ret, "keygen command returned %d", ret);
+	zassert_not_null(strstr(out, "Generated device key in sec tag 42"),
+			 "missing success line, got: %s", out);
+	zassert_true(tls_credentials_key_exists(TEST_SEC_TAG),
+		     "key not created by shell command");
+}
+
+ZTEST(keygen_shell, test_shell_keygen_already_exists)
+{
+	int ret;
+	const char *out;
+
+	(void)run("cred key generate 42", NULL);
+	out = run("cred key generate 42", &ret);
+
+	zassert_not_equal(ret, 0, "second keygen should fail");
+	zassert_not_null(strstr(out, "Key already exists"), "missing warning, got: %s", out);
+	zassert_not_null(strstr(out, "delete"), "should point user to 'delete', got: %s", out);
+}
+
+ZTEST(keygen_shell, test_shell_csr_output)
+{
+	int ret;
+	const char *out;
+
+	char tok[1024];
+	uint8_t der[512];
+	size_t tok_len;
+	size_t der_len = 0;
+	mbedtls_x509_csr csr;
+
+	(void)run("cred key generate 42", NULL);
+	out = run("cred key csr 42 CN=test,O=Nordic", &ret);
+
+	zassert_ok(ret, "csr command returned %d", ret);
+	/* Host tooling captures the Base64 DER from the "CSR: " prefix and uses
+	 * the completion marker to know the output is done.
+	 */
+	zassert_not_null(strstr(out, "CSR: "), "missing 'CSR: ' prefix, got: %s", out);
+	zassert_not_null(strstr(out, "CSR generation complete"),
+			 "missing completion marker, got: %s", out);
+
+	/* The printed CSR must be valid, complete Base64. Decoding it and parsing
+	 * the result as a CSR proves the line is real Base64 and was not
+	 * truncated: a cut-off line would decode to a malformed DER that fails to
+	 * parse.
+	 */
+	tok_len = token_after(out, "CSR: ", tok, sizeof(tok));
+	zassert_true(tok_len > 0, "no CSR token in output: %s", out);
+	zassert_true(is_base64(tok), "CSR is not Base64: %s", tok);
+	zassert_ok(base64_decode(der, sizeof(der), &der_len, tok, tok_len),
+		   "CSR Base64 does not decode (truncated?)");
+	zassert_true(der_len > 0, "decoded CSR is empty");
+
+	mbedtls_x509_csr_init(&csr);
+	zassert_equal(mbedtls_x509_csr_parse_der(&csr, der, der_len), 0,
+		      "decoded CSR does not parse (truncated?)");
+	mbedtls_x509_csr_free(&csr);
+}
+
+ZTEST(keygen_shell, test_shell_csr_requires_subject)
+{
+	int ret;
+
+	(void)run("cred key generate 42", NULL);
+	(void)run("cred key csr 42", &ret);
+
+	zassert_not_equal(ret, 0, "csr without a subject should fail");
+}
+
+ZTEST(keygen_shell, test_shell_csr_invalid_subject)
+{
+	int ret;
+	const char *out;
+
+	(void)run("cred key generate 42", NULL);
+	out = run("cred key csr 42 notasubject", &ret);
+
+	zassert_not_equal(ret, 0, "csr with an invalid subject should fail");
+	zassert_not_null(strstr(out, "CSR generation failed"), "missing error, got: %s", out);
+}
+
+ZTEST(keygen_shell, test_shell_pubkey_output)
+{
+	int ret;
+	const char *out;
+
+	char tok[128];
+	uint8_t dec[80];
+	size_t tok_len;
+	size_t dec_len = 0;
+
+	(void)run("cred key generate 42", NULL);
+	out = run("cred key pubkey 42", &ret);
+
+	zassert_ok(ret, "pubkey command returned %d", ret);
+	zassert_not_null(strstr(out, "PUBKEY: "), "missing 'PUBKEY: ' prefix, got: %s", out);
+	zassert_not_null(strstr(out, "Public key export complete"),
+			 "missing completion marker, got: %s", out);
+
+	/* The printed key must be valid, complete Base64. A 65-byte SEC1 point
+	 * encodes to exactly 88 Base64 characters; decoding back to 65 bytes
+	 * starting with 0x04 proves it is neither malformed nor truncated.
+	 */
+	tok_len = token_after(out, "PUBKEY: ", tok, sizeof(tok));
+	zassert_equal(tok_len, 88, "public key Base64 length %zu != 88 (truncated?)", tok_len);
+	zassert_true(is_base64(tok), "public key is not Base64: %s", tok);
+	zassert_ok(base64_decode(dec, sizeof(dec), &dec_len, tok, tok_len),
+		   "public key Base64 does not decode");
+	zassert_equal(dec_len, 65, "decoded public key is %zu bytes, expected 65", dec_len);
+	zassert_equal(dec[0], 0x04, "decoded public key is not an uncompressed point");
+}
+
+ZTEST(keygen_shell, test_shell_delete_output)
+{
+	int ret;
+	const char *out;
+
+	(void)run("cred key generate 42", NULL);
+	out = run("cred key delete 42", &ret);
+
+	zassert_ok(ret, "delete command returned %d", ret);
+	zassert_not_null(strstr(out, "Deleted device key in sec tag 42"),
+			 "missing delete confirmation, got: %s", out);
+	zassert_false(tls_credentials_key_exists(TEST_SEC_TAG),
+		      "key still present after shell delete");
+}
+
+ZTEST(keygen_shell, test_shell_invalid_sec_tag)
+{
+	int ret;
+	const char *out = run("cred key generate notanumber", &ret);
+
+	zassert_not_equal(ret, 0, "invalid sec tag should fail");
+	zassert_not_null(strstr(out, "not a valid sectag"), "missing error, got: %s", out);
 }
